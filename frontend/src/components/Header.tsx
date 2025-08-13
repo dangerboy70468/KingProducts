@@ -1,14 +1,21 @@
-import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { MenuIcon, BellIcon, UserIcon, LogOutIcon } from "lucide-react";
 
-export const Header = ({ toggleSidebar }) => {
+interface HeaderProps {
+  toggleSidebar: () => void;
+}
+
+interface PathTitles {
+  [key: string]: string;
+}
+
+export const Header = ({ toggleSidebar }: HeaderProps) => {
   const location = useLocation();
   const navigate = useNavigate();
 
   // Convert path to display name
-  const getPageTitle = (path) => {
-    const titles = {
+  const getPageTitle = (path: string): string => {
+    const titles: Record<string, string> = {
       "/dashboard": "Dashboard",
       "/products": "Product Management",
       "/clients": "Client Management",
