@@ -5,26 +5,29 @@ import db from "../config/db.config.js";
 const router = express.Router();
 
 // Get all payroll records (optionally filter by month)
-router.get("/", verifyToken, (req, res) => {
-  const { month } = req.query;
-  let sql = `
-    SELECT 
-      p.*,
-      e.name as employee_name
-    FROM payroll p
-    JOIN employee e ON p.employee_id = e.id
-  `;
-  let params = [];
-  if (month) {
-    sql += " WHERE p.salary_month = ?";
-    params.push(month);
-  }
-  sql += " ORDER BY p.payment_date DESC";
-  db.query(sql, params, (err, data) => {
-    if (err)
-      return res.status(500).json({ error: "Error fetching payroll records" });
+router.get("/", verifyToken, async (req, res) => {
+  try {
+    const { month } = req.query;
+    let sql = `
+      SELECT 
+        p.*,
+        e.name as employee_name
+      FROM payroll p
+      JOIN employee e ON p.employee_id = e.id
+    `;
+    let params = [];
+    if (month) {
+      sql += " WHERE p.salary_month = ?";
+      params.push(month);
+    }
+    sql += " ORDER BY p.payment_date DESC";
+    
+    const [data] = await db.query(sql, params);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching payroll records:', error);
+    res.status(500).json({ error: "Error fetching payroll records", details: error.message });
+  }
 });
 
 // Get payroll by employee
@@ -49,35 +52,32 @@ router.get("/employee/:employeeId", verifyToken, (req, res) => {
 });
 
 // Create payroll record
-router.post("/", verifyToken, (req, res) => {
-  const {
-    employee_id,
-    salary_month,
-    base_salary,
-    present_days,
-    late_days,
-    deduction_percent,
-    overtime_hours,
-    overtime_rate,
-    overtime_pay,
-    bonuses,
-    deductions,
-    total_salary,
-    payment_date,
-  } = req.body;
+router.post("/", verifyToken, async (req, res) => {
+  try {
+    const {
+      employee_id,
+      salary_month,
+      base_salary,
+      present_days,
+      late_days,
+      deduction_percent,
+      overtime_hours,
+      overtime_rate,
+      overtime_pay,
+      bonuses,
+      deductions,
+      total_salary,
+      payment_date,
+    } = req.body;
 
-  const sql = `
-    INSERT INTO payroll (
-      employee_id, salary_month, base_salary,
-      present_days, late_days, deduction_percent,
-      overtime_hours, overtime_rate, overtime_pay,
-      bonuses, deductions, total_salary, payment_date
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `;
-
-  db.query(
-    sql,
-    [
+    const [result] = await db.query(`
+      INSERT INTO payroll (
+        employee_id, salary_month, base_salary,
+        present_days, late_days, deduction_percent,
+        overtime_hours, overtime_rate, overtime_pay,
+        bonuses, deductions, total_salary, payment_date
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
       employee_id,
       salary_month,
       base_salary,
@@ -91,45 +91,42 @@ router.post("/", verifyToken, (req, res) => {
       deductions || 0,
       total_salary,
       payment_date,
-    ],
-    (err, result) => {
-      if (err)
-        return res.status(500).json({ error: "Error creating payroll record" });
-      res.status(201).json({
-        id: result.insertId,
-        ...req.body,
-      });
-    }
-  );
+    ]);
+
+    res.status(201).json({
+      id: result.insertId,
+      ...req.body,
+    });
+  } catch (error) {
+    console.error('Error creating payroll record:', error);
+    res.status(500).json({ error: "Error creating payroll record", details: error.message });
+  }
 });
 
 // Update payroll record
-router.put("/:id", verifyToken, (req, res) => {
-  const {
-    base_salary,
-    present_days,
-    late_days,
-    deduction_percent,
-    overtime_hours,
-    overtime_rate,
-    overtime_pay,
-    bonuses,
-    deductions,
-    total_salary,
-    payment_date,
-  } = req.body;
+router.put("/:id", verifyToken, async (req, res) => {
+  try {
+    const {
+      base_salary,
+      present_days,
+      late_days,
+      deduction_percent,
+      overtime_hours,
+      overtime_rate,
+      overtime_pay,
+      bonuses,
+      deductions,
+      total_salary,
+      payment_date,
+    } = req.body;
 
-  const sql = `
-    UPDATE payroll 
-    SET base_salary=?, present_days=?, late_days=?, deduction_percent=?,
-        overtime_hours=?, overtime_rate=?, overtime_pay=?,
-        bonuses=?, deductions=?, total_salary=?, payment_date=?
-    WHERE id=?
-  `;
-
-  db.query(
-    sql,
-    [
+    const [result] = await db.query(`
+      UPDATE payroll 
+      SET base_salary=?, present_days=?, late_days=?, deduction_percent=?,
+          overtime_hours=?, overtime_rate=?, overtime_pay=?,
+          bonuses=?, deductions=?, total_salary=?, payment_date=?
+      WHERE id=?
+    `, [
       base_salary,
       present_days || 0,
       late_days || 0,
@@ -142,30 +139,36 @@ router.put("/:id", verifyToken, (req, res) => {
       total_salary,
       payment_date,
       req.params.id,
-    ],
-    (err, result) => {
-      if (err)
-        return res.status(500).json({ error: "Error updating payroll record" });
-      if (result.affectedRows === 0)
-        return res.status(404).json({ message: "Payroll record not found" });
-      res.json({
-        id: parseInt(req.params.id),
-        ...req.body,
-      });
+    ]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Payroll record not found" });
     }
-  );
+    
+    res.json({
+      id: parseInt(req.params.id),
+      ...req.body,
+    });
+  } catch (error) {
+    console.error('Error updating payroll record:', error);
+    res.status(500).json({ error: "Error updating payroll record", details: error.message });
+  }
 });
 
 // Delete payroll record
-router.delete("/:id", verifyToken, (req, res) => {
-  const sql = "DELETE FROM payroll WHERE id = ?";
-  db.query(sql, [req.params.id], (err, result) => {
-    if (err)
-      return res.status(500).json({ error: "Error deleting payroll record" });
-    if (result.affectedRows === 0)
+router.delete("/:id", verifyToken, async (req, res) => {
+  try {
+    const [result] = await db.query("DELETE FROM payroll WHERE id = ?", [req.params.id]);
+    
+    if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Payroll record not found" });
+    }
+    
     res.json({ message: "Payroll record deleted successfully" });
-  });
+  } catch (error) {
+    console.error('Error deleting payroll record:', error);
+    res.status(500).json({ error: "Error deleting payroll record", details: error.message });
+  }
 });
 
 // Get payroll summary by date range
