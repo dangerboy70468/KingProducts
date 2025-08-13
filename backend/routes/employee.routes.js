@@ -7,12 +7,7 @@ const router = express.Router();
 // Health check route (no auth)
 router.get("/health", async (req, res) => {
   try {
-    const result = await new Promise((resolve, reject) => {
-      db.query('SELECT 1 as test', (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      });
-    });
+    const [result] = await db.query('SELECT 1 as test');
     res.json({ status: 'ok', database: 'connected', test: result[0] });
   } catch (error) {
     console.error('Database health check failed:', error);
@@ -24,20 +19,8 @@ router.get("/health", async (req, res) => {
 router.get("/test-employee-types", async (req, res) => {
   try {
     console.log('Testing employee types without auth...');
-    const sql = "SELECT * FROM employee_type LIMIT 5";
-    
-    const results = await new Promise((resolve, reject) => {
-      db.query(sql, (err, results) => {
-        if (err) {
-          console.error('Database query error:', err);
-          reject(err);
-        } else {
-          console.log('Query successful, rows:', results.length);
-          resolve(results);
-        }
-      });
-    });
-    
+    const [results] = await db.query("SELECT * FROM employee_type LIMIT 5");
+    console.log('Query successful, rows:', results.length);
     res.json({ success: true, data: results, count: results.length });
   } catch (error) {
     console.error('Error in test route:', error);
@@ -54,30 +37,18 @@ router.get("/test-employee-types", async (req, res) => {
 router.get("/employees", verifyToken, async (req, res) => {
   try {
     console.log('Fetching employees...');
-    const sql = `
+    const [results] = await db.query(`
       SELECT e.*, COALESCE(et.name, 'Unknown') as type_name 
       FROM employee e 
       LEFT JOIN employee_type et ON e.type_id = et.id
-    `;
-    
-    const results = await new Promise((resolve, reject) => {
-      db.query(sql, (err, results) => {
-        if (err) {
-          console.error('Database query error:', err);
-          reject(err);
-        } else {
-          console.log('Query successful, rows:', results.length);
-          resolve(results);
-        }
-      });
-    });
-    
+    `);
+    console.log('Query successful, rows:', results.length);
     res.json(results);
   } catch (error) {
     console.error('Error in /employees:', error);
     res.status(500).json({ 
       error: "Error fetching employees",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: error.message
     });
   }
 });
@@ -86,26 +57,14 @@ router.get("/employees", verifyToken, async (req, res) => {
 router.get("/employee-types", verifyToken, async (req, res) => {
   try {
     console.log('Fetching employee types...');
-    const sql = "SELECT * FROM employee_type ORDER BY id";
-    
-    const results = await new Promise((resolve, reject) => {
-      db.query(sql, (err, results) => {
-        if (err) {
-          console.error('Database query error:', err);
-          reject(err);
-        } else {
-          console.log('Query successful, rows:', results.length);
-          resolve(results);
-        }
-      });
-    });
-    
+    const [results] = await db.query("SELECT * FROM employee_type ORDER BY id");
+    console.log('Query successful, rows:', results.length);
     res.json(results);
   } catch (error) {
     console.error('Error in /employee-types:', error);
     res.status(500).json({ 
       error: "Error fetching employee types",
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: error.message
     });
   }
 });

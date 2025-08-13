@@ -53,7 +53,7 @@ router.get("/batch/:batchId", verifyToken, (req, res) => {
 // Get batch-order assignments by order
 router.get("/order/:orderId", verifyToken, async (req, res) => {
   try {
-    const sql = `
+    const [results] = await db.query(`
       SELECT bo.*, 
              b.batch_number,
              b.mfg_date,
@@ -64,19 +64,12 @@ router.get("/order/:orderId", verifyToken, async (req, res) => {
       FROM batch_order bo
       JOIN batch b ON bo.fk_batch_order_batch = b.id
       WHERE bo.fk_batch_order_order = ?
-    `;
-    
-    const results = await new Promise((resolve, reject) => {
-      db.query(sql, [req.params.orderId], (err, data) => {
-        if (err) reject(err);
-        else resolve(data);
-      });
-    });
+    `, [req.params.orderId]);
     
     res.json(results);
   } catch (error) {
     console.error('Error in /order/:orderId:', error);
-    res.status(500).json({ error: "Error fetching order batches" });
+    res.status(500).json({ error: "Error fetching order batches", details: error.message });
   }
 });
 
