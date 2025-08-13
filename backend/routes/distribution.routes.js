@@ -31,104 +31,92 @@ router.get("/", verifyToken, async (req, res) => {
 });
 
 // Get available orders (not assigned to any distribution)
-router.get("/available-orders", verifyToken, (req, res) => {
-  const sql = `
-    SELECT 
-      o.*,
-      c.name as client_name,
-      p.name as product_name,
-      COALESCE(bo.qty, 0) as assigned_qty,
-      COALESCE(o.total_price, COALESCE(bo.qty, 0) * o.unit_price) as total_price
-    FROM orders o
-    LEFT JOIN distribution_order do ON do.fk_distribution_order_order = o.id
-    JOIN client c ON c.id = o.fk_order_client
-    JOIN product p ON p.id = o.fk_order_product
-    LEFT JOIN batch_order bo ON bo.fk_batch_order_order = o.id
-    WHERE do.fk_distribution_order_order IS NULL
-      AND o.status = 'assigned'
-  `;
-
-  db.query(sql, (err, data) => {
-    if (err) {
-      console.error("Error fetching available orders:", err);
-      return res.status(500).json({ error: "Error fetching available orders" });
-    }
+router.get("/available-orders", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT 
+        o.*,
+        c.name as client_name,
+        p.name as product_name,
+        COALESCE(bo.qty, 0) as assigned_qty,
+        COALESCE(o.total_price, COALESCE(bo.qty, 0) * o.unit_price) as total_price
+      FROM orders o
+      LEFT JOIN distribution_order do ON do.fk_distribution_order_order = o.id
+      JOIN client c ON c.id = o.fk_order_client
+      JOIN product p ON p.id = o.fk_order_product
+      LEFT JOIN batch_order bo ON bo.fk_batch_order_order = o.id
+      WHERE do.fk_distribution_order_order IS NULL
+        AND o.status = 'assigned'
+    `);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching available orders:', error);
+    res.status(500).json({ error: "Error fetching available orders", details: error.message });
+  }
 });
 
 // Get available employees (not assigned to any active distribution)
-router.get("/available-employees", verifyToken, (req, res) => {
-  const sql = `
-    SELECT e.*, et.name as type_name
-    FROM employee e
-    JOIN employee_type et ON et.id = e.type_id
-    WHERE e.id NOT IN (
-      SELECT DISTINCT de.fk_distribution_employee_employee
-      FROM distribution_employee de
-      JOIN distribution d ON d.id = de.fk_distribution_employee_distribution
-      WHERE d.departure_time IS NOT NULL 
-      AND d.arrival_time IS NULL
-    )
-  `;
-
-  db.query(sql, (err, data) => {
-    if (err) {
-      console.error("Error fetching available employees:", err);
-      return res
-        .status(500)
-        .json({ error: "Error fetching available employees" });
-    }
+router.get("/available-employees", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT e.*, et.name as type_name
+      FROM employee e
+      JOIN employee_type et ON et.id = e.type_id
+      WHERE e.id NOT IN (
+        SELECT DISTINCT de.fk_distribution_employee_employee
+        FROM distribution_employee de
+        JOIN distribution d ON d.id = de.fk_distribution_employee_distribution
+        WHERE d.departure_time IS NOT NULL 
+        AND d.arrival_time IS NULL
+      )
+    `);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching available employees:', error);
+    res.status(500).json({ error: "Error fetching available employees", details: error.message });
+  }
 });
 
 // Get orders for a specific distribution
-router.get("/:id/orders", verifyToken, (req, res) => {
-  const sql = `
-    SELECT 
-      o.*,
-      c.name as client_name,
-      p.name as product_name,
-      COALESCE(bo.qty, 0) as assigned_qty,
-      bo.description as batch_notes,
-      COALESCE(o.total_price, COALESCE(bo.qty, 0) * o.unit_price) as total_price
-    FROM orders o
-    JOIN distribution_order do ON do.fk_distribution_order_order = o.id
-    JOIN client c ON c.id = o.fk_order_client
-    JOIN product p ON p.id = o.fk_order_product
-    LEFT JOIN batch_order bo ON bo.fk_batch_order_order = o.id
-    WHERE do.fk_distribution_order_distribution = ?
-  `;
-  db.query(sql, [req.params.id], (err, data) => {
-    if (err) {
-      console.error("Error fetching distribution orders:", err);
-      return res
-        .status(500)
-        .json({ error: "Error fetching distribution orders" });
-    }
+router.get("/:id/orders", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT 
+        o.*,
+        c.name as client_name,
+        p.name as product_name,
+        COALESCE(bo.qty, 0) as assigned_qty,
+        bo.description as batch_notes,
+        COALESCE(o.total_price, COALESCE(bo.qty, 0) * o.unit_price) as total_price
+      FROM orders o
+      JOIN distribution_order do ON do.fk_distribution_order_order = o.id
+      JOIN client c ON c.id = o.fk_order_client
+      JOIN product p ON p.id = o.fk_order_product
+      LEFT JOIN batch_order bo ON bo.fk_batch_order_order = o.id
+      WHERE do.fk_distribution_order_distribution = ?
+    `, [req.params.id]);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching distribution orders:', error);
+    res.status(500).json({ error: "Error fetching distribution orders", details: error.message });
+  }
 });
 
 // Get employees for a specific distribution
-router.get("/:id/employees", verifyToken, (req, res) => {
-  const sql = `
-    SELECT e.*, et.name as type_name
-    FROM employee e
-    JOIN distribution_employee de ON de.fk_distribution_employee_employee = e.id
-    JOIN employee_type et ON et.id = e.type_id
-    WHERE de.fk_distribution_employee_distribution = ?
-  `;
-  db.query(sql, [req.params.id], (err, data) => {
-    if (err) {
-      console.error("Error fetching distribution employees:", err);
-      return res
-        .status(500)
-        .json({ error: "Error fetching distribution employees" });
-    }
+router.get("/:id/employees", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT e.*, et.name as type_name
+      FROM employee e
+      JOIN distribution_employee de ON de.fk_distribution_employee_employee = e.id
+      JOIN employee_type et ON et.id = e.type_id
+      WHERE de.fk_distribution_employee_distribution = ?
+    `, [req.params.id]);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching distribution employees:', error);
+    res.status(500).json({ error: "Error fetching distribution employees", details: error.message });
+  }
 });
 
 // Create new distribution record with employees and orders
