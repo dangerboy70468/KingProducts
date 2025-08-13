@@ -5,37 +5,34 @@ import db from "../config/db.config.js";
 const router = express.Router();
 
 // Get production requirements grouped by product and date
-router.get("/requirements", verifyToken, (req, res) => {
-  console.log("Fetching production requirements...");
-  const sql = `    SELECT 
-      p.id as product_id,
-      p.name as product_name,
-      DATE_FORMAT(o.required_date, '%Y-%m-%d') as required_date,
-      o.qty as required_quantity,
-      c.name as client_name,
-      o.id as order_id,
-      o.status,
-      CASE 
-        WHEN DATE(o.required_date) < CURDATE() THEN 'overdue'
-        WHEN DATE(o.required_date) = CURDATE() THEN 'today'
-        WHEN DATE(o.required_date) = DATE_ADD(CURDATE(), INTERVAL 1 DAY) THEN 'tomorrow'
-        ELSE 'upcoming'
-      END as urgency
-    FROM orders o
-    JOIN product p ON o.fk_order_product = p.id
-    JOIN client c ON o.fk_order_client = c.id
-    WHERE o.status = 'pending'
-    ORDER BY o.required_date ASC, p.name ASC
-  `;
-
-  db.query(sql, (err, data) => {
-    if (err) {
-      console.error("Database error details:", err);
-      return res
-        .status(500)
-        .json({ error: "Error fetching production requirements" });
-    }
-    console.log("Raw data:", data); // Group by urgency and then by product
+router.get("/requirements", verifyToken, async (req, res) => {
+  try {
+    console.log("Fetching production requirements...");
+    const [data] = await db.query(`
+      SELECT 
+        p.id as product_id,
+        p.name as product_name,
+        DATE_FORMAT(o.required_date, '%Y-%m-%d') as required_date,
+        o.qty as required_quantity,
+        c.name as client_name,
+        o.id as order_id,
+        o.status,
+        CASE 
+          WHEN DATE(o.required_date) < CURDATE() THEN 'overdue'
+          WHEN DATE(o.required_date) = CURDATE() THEN 'today'
+          WHEN DATE(o.required_date) = DATE_ADD(CURDATE(), INTERVAL 1 DAY) THEN 'tomorrow'
+          ELSE 'upcoming'
+        END as urgency
+      FROM orders o
+      JOIN product p ON o.fk_order_product = p.id
+      JOIN client c ON o.fk_order_client = c.id
+      WHERE o.status = 'pending'
+      ORDER BY o.required_date ASC, p.name ASC
+    `);
+    
+    console.log("Raw data:", data);
+    
+    // Group by urgency and then by product
     const groupedByUrgency = data.reduce((acc, row) => {
       const dateStr = row.required_date;
       const urgencyGroup = acc.find((g) => g.urgency === row.urgency);
@@ -95,7 +92,13 @@ router.get("/requirements", verifyToken, (req, res) => {
     });
 
     res.json(groupedByUrgency);
-  });
+  } catch (error) {
+    console.error("Error fetching production requirements:", error);
+    res.status(500).json({ 
+      error: "Error fetching production requirements",
+      details: error.message
+    });
+  }
 });
 
 export default router;
