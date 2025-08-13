@@ -6,46 +6,55 @@ import db from "../config/db.config.js";
 const router = express.Router();
 
 // Get all batches with product info
-router.get("/", verifyToken, (req, res) => {
-  const sql = `
-    SELECT b.*, p.name as product_name 
-    FROM batch b
-    LEFT JOIN product p ON b.fk_batch_product = p.id
-  `;
-  db.query(sql, (err, data) => {
-    if (err) return res.status(500).json({ error: "Error fetching batches" });
+router.get("/", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT b.*, p.name as product_name 
+      FROM batch b
+      LEFT JOIN product p ON b.fk_batch_product = p.id
+      ORDER BY b.id DESC
+    `);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching batches:', error);
+    res.status(500).json({ error: "Error fetching batches", details: error.message });
+  }
 });
 
 // Get batches by product
-router.get("/product/:productId", verifyToken, (req, res) => {
-  const sql = `
-    SELECT b.*, p.name as product_name 
-    FROM batch b
-    LEFT JOIN product p ON b.fk_batch_product = p.id
-    WHERE b.fk_batch_product = ?
-  `;
-  db.query(sql, [req.params.productId], (err, data) => {
-    if (err) return res.status(500).json({ error: "Error fetching batches" });
+router.get("/product/:productId", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT b.*, p.name as product_name 
+      FROM batch b
+      LEFT JOIN product p ON b.fk_batch_product = p.id
+      WHERE b.fk_batch_product = ?
+    `, [req.params.productId]);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching batches:', error);
+    res.status(500).json({ error: "Error fetching batches", details: error.message });
+  }
 });
 
 // Get single batch
-router.get("/:id", verifyToken, (req, res) => {
-  const sql = `
-    SELECT b.*, p.name as product_name 
-    FROM batch b
-    LEFT JOIN product p ON b.fk_batch_product = p.id
-    WHERE b.id = ?
-  `;
-  db.query(sql, [req.params.id], (err, data) => {
-    if (err) return res.status(500).json({ error: "Error fetching batch" });
-    if (data.length === 0)
+router.get("/:id", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT b.*, p.name as product_name 
+      FROM batch b
+      LEFT JOIN product p ON b.fk_batch_product = p.id
+      WHERE b.id = ?
+    `, [req.params.id]);
+    
+    if (data.length === 0) {
       return res.status(404).json({ message: "Batch not found" });
+    }
     res.json(data[0]);
-  });
+  } catch (error) {
+    console.error('Error fetching batch:', error);
+    res.status(500).json({ error: "Error fetching batch", details: error.message });
+  }
 });
 
 // Create batch
