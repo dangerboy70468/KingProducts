@@ -233,19 +233,14 @@ router.post("/", verifyToken, (req, res) => {
 });
 
 // Start job (set departure time)
-router.post("/:id/start", verifyToken, (req, res) => {
-  // First check if distribution exists and is in correct state
-  const checkSql = `
-    SELECT departure_time, arrival_time
-    FROM distribution 
-    WHERE id = ?
-  `;
-
-  db.query(checkSql, [req.params.id], (err, data) => {
-    if (err) {
-      console.error("Error checking distribution:", err);
-      return res.status(500).json({ error: "Error checking distribution status" });
-    }
+router.post("/:id/start", verifyToken, async (req, res) => {
+  try {
+    // Check if distribution exists and is in correct state
+    const [data] = await db.query(`
+      SELECT departure_time, arrival_time
+      FROM distribution 
+      WHERE id = ?
+    `, [req.params.id]);
 
     if (data.length === 0) {
       return res.status(404).json({ error: "Distribution not found" });
@@ -259,63 +254,30 @@ router.post("/:id/start", verifyToken, (req, res) => {
       return res.status(400).json({ error: "Cannot start a completed distribution" });
     }
 
-    // Start transaction for updating distribution and orders
-    db.beginTransaction(err => {
-      if (err) {
-        console.error("Error starting transaction:", err);
-        return res.status(500).json({ error: "Error starting transaction" });
-      }
+    // Update distribution departure time
+    const [result] = await db.query(`
+      UPDATE distribution
+      SET departure_time = CURRENT_TIME()
+      WHERE id = ? AND departure_time IS NULL
+    `, [req.params.id]);
 
-      // Update distribution departure time
-      const sql = `
-        UPDATE distribution
-        SET departure_time = CURRENT_TIME()
-        WHERE id = ? AND departure_time IS NULL
-      `;
+    if (result.affectedRows === 0) {
+      return res.status(400).json({ error: "Distribution already started or not found" });
+    }
 
-      db.query(sql, [req.params.id], (err, result) => {
-        if (err) {
-          return db.rollback(() => {
-            console.error("Error starting distribution:", err);
-            res.status(500).json({ error: "Error starting distribution" });
-          });
-        }
+    // Update orders status
+    await db.query(`
+      UPDATE orders o
+      JOIN distribution_order do ON do.fk_distribution_order_order = o.id
+      SET o.status = 'in_transit'
+      WHERE do.fk_distribution_order_distribution = ?
+    `, [req.params.id]);
 
-        if (result.affectedRows === 0) {
-          return db.rollback(() => {
-            res.status(400).json({ error: "Distribution already started or not found" });
-          });
-        }
-
-        // Update orders status
-        const updateOrdersSql = `
-          UPDATE orders o
-          JOIN distribution_order do ON do.fk_distribution_order_order = o.id
-          SET o.status = 'in_transit'
-          WHERE do.fk_distribution_order_distribution = ?
-        `;
-
-        db.query(updateOrdersSql, [req.params.id], (err) => {
-          if (err) {
-            return db.rollback(() => {
-              console.error("Error updating orders status:", err);
-              res.status(500).json({ error: "Error updating orders status" });
-            });
-          }
-
-          db.commit(err => {
-            if (err) {
-              return db.rollback(() => {
-                console.error("Error committing transaction:", err);
-                res.status(500).json({ error: "Error committing transaction" });
-              });
-            }
-            res.json({ message: "Distribution started successfully" });
-          });
-        });
-      });
-    });
-  });
+    res.json({ message: "Distribution started successfully" });
+  } catch (error) {
+    console.error('Error starting distribution:', error);
+    res.status(500).json({ error: "Error starting distribution", details: error.message });
+  }
 });
 
 // End distribution
@@ -404,86 +366,41 @@ router.post("/:id/end", verifyToken, (req, res) => {
 });
 
 // Delete distribution (only if not started)
-router.delete("/:id", verifyToken, (req, res) => {
-  db.beginTransaction((err) => {
-    if (err) {
-      console.error("Error starting transaction:", err);
-      return res.status(500).json({ error: "Error deleting distribution" });
-    }
-
-    // First check if distribution can be deleted
-    const checkSql = `
+router.delete("/:id", verifyToken, async (req, res) => {
+  try {
+    // Check if distribution can be deleted
+    const [data] = await db.query(`
       SELECT departure_time 
       FROM distribution 
       WHERE id = ?
-    `;
+    `, [req.params.id]);
 
-    db.query(checkSql, [req.params.id], (err, data) => {
-      if (err) {
-        return db.rollback(() => {
-          console.error("Error checking distribution:", err);
-          res.status(500).json({ error: "Error checking distribution" });
-        });
-      }
+    if (data.length === 0) {
+      return res.status(404).json({ error: "Distribution not found" });
+    }
 
-      if (data.length === 0) {
-        return db.rollback(() => {
-          res.status(404).json({ error: "Distribution not found" });
-        });
-      }
-
-      if (data[0].departure_time !== null) {
-        return db.rollback(() => {
-          res.status(400).json({
-            error: "Cannot delete distribution that has already started",
-          });
-        });
-      }
-
-      // Update orders status back to pending
-      const updateOrdersSql = `
-        UPDATE orders o
-        JOIN distribution_order do ON do.fk_distribution_order_order = o.id
-        SET o.status = 'pending'
-        WHERE do.fk_distribution_order_distribution = ?
-      `;
-
-      db.query(updateOrdersSql, [req.params.id], (err) => {
-        if (err) {
-          return db.rollback(() => {
-            console.error("Error updating orders status:", err);
-            res.status(500).json({ error: "Error updating orders status" });
-          });
-        }
-
-        // Delete the distribution (cascade will handle related records)
-        const deleteSql = `
-          DELETE FROM distribution 
-          WHERE id = ?
-        `;
-
-        db.query(deleteSql, [req.params.id], (err) => {
-          if (err) {
-            return db.rollback(() => {
-              console.error("Error deleting distribution:", err);
-              res.status(500).json({ error: "Error deleting distribution" });
-            });
-          }
-
-          db.commit((err) => {
-            if (err) {
-              return db.rollback(() => {
-                console.error("Error committing transaction:", err);
-                res.status(500).json({ error: "Error committing transaction" });
-              });
-            }
-
-            res.json({ message: "Distribution deleted successfully" });
-          });
-        });
+    if (data[0].departure_time !== null) {
+      return res.status(400).json({
+        error: "Cannot delete distribution that has already started",
       });
-    });
-  });
+    }
+
+    // Update orders status back to assigned
+    await db.query(`
+      UPDATE orders o
+      JOIN distribution_order do ON do.fk_distribution_order_order = o.id
+      SET o.status = 'assigned'
+      WHERE do.fk_distribution_order_distribution = ?
+    `, [req.params.id]);
+
+    // Delete the distribution (cascade will handle related records)
+    await db.query(`DELETE FROM distribution WHERE id = ?`, [req.params.id]);
+
+    res.json({ message: "Distribution deleted successfully" });
+  } catch (error) {
+    console.error('Error deleting distribution:', error);
+    res.status(500).json({ error: "Error deleting distribution", details: error.message });
+  }
 });
 
 // Cancel an in-progress distribution
