@@ -43,13 +43,13 @@ router.get("/:id", verifyToken, async (req, res) => {
 // Create inventory item
 router.post("/", verifyToken, async (req, res) => {
   try {
-    const { productId, initialQty, mfgDate, expDate, cost, description } = req.body;
+    const { fk_batch_product, batch_number, init_qty, mfg_date, exp_date, cost, description } = req.body;
 
     const [result] = await db.query(`
       INSERT INTO batch (
-        fk_batch_product, qty, mfg_date, exp_date, cost, description
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `, [productId, initialQty, mfgDate, expDate, cost, description]);
+        fk_batch_product, batch_number, init_qty, qty, mfg_date, exp_date, cost, description
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [fk_batch_product, batch_number, init_qty, init_qty, mfg_date, exp_date, cost, description]);
 
     res.status(201).json({
       id: result.insertId,
@@ -64,13 +64,13 @@ router.post("/", verifyToken, async (req, res) => {
 // Update inventory item
 router.put("/:id", verifyToken, async (req, res) => {
   try {
-    const { productId, qty, mfgDate, expDate, cost, description } = req.body;
+    const { fk_batch_product, batch_number, init_qty, qty, mfg_date, exp_date, cost, description } = req.body;
 
     const [result] = await db.query(`
       UPDATE batch 
-      SET fk_batch_product=?, qty=?, mfg_date=?, exp_date=?, cost=?, description=?
+      SET fk_batch_product=?, batch_number=?, init_qty=?, qty=?, mfg_date=?, exp_date=?, cost=?, description=?
       WHERE id=?
-    `, [productId, qty, mfgDate, expDate, cost, description, req.params.id]);
+    `, [fk_batch_product, batch_number, init_qty, qty, mfg_date, exp_date, cost, description, req.params.id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Inventory item not found" });
