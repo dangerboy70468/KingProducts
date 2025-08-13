@@ -120,116 +120,48 @@ router.get("/:id/employees", verifyToken, async (req, res) => {
 });
 
 // Create new distribution record with employees and orders
-router.post("/", verifyToken, (req, res) => {
-  const { notes, employeeIds, orderIds } = req.body;
+router.post("/", verifyToken, async (req, res) => {
+  try {
+    const { notes, employeeIds, orderIds } = req.body;
 
-  if (!employeeIds?.length || !orderIds?.length) {
-    return res
-      .status(400)
-      .json({ error: "Must provide at least one employee and one order" });
-  }
-
-  db.beginTransaction((err) => {
-    if (err) {
-      console.error("Error starting transaction:", err);
-      return res.status(500).json({ error: "Error creating distribution" });
+    if (!employeeIds?.length || !orderIds?.length) {
+      return res.status(400).json({ error: "Must provide at least one employee and one order" });
     }
 
     // 1. Create distribution record
-    const distributionSql = `
-      INSERT INTO distribution (notes)
-      VALUES (?)
-    `;
+    const [result] = await db.query(`INSERT INTO distribution (notes) VALUES (?)`, [notes]);
+    const distributionId = result.insertId;
 
-    db.query(distributionSql, [notes], (err, result) => {
-      if (err) {
-        console.error("Error creating distribution:", err);
-        return db.rollback(() => {
-          res.status(500).json({ error: "Error creating distribution" });
-        });
-      }
+    // 2. Create employee assignments
+    const employeeValues = employeeIds.map((empId) => [distributionId, empId]);
+    await db.query(`
+      INSERT INTO distribution_employee 
+      (fk_distribution_employee_distribution, fk_distribution_employee_employee)
+      VALUES ?
+    `, [employeeValues]);
 
-      const distributionId = result.insertId;
+    // 3. Create order assignments
+    const orderValues = orderIds.map((orderId) => [distributionId, orderId]);
+    await db.query(`
+      INSERT INTO distribution_order 
+      (fk_distribution_order_distribution, fk_distribution_order_order)
+      VALUES ?
+    `, [orderValues]);
 
-      // 2. Create employee assignments
-      const employeeSql = `
-        INSERT INTO distribution_employee 
-        (fk_distribution_employee_distribution, fk_distribution_employee_employee)
-        VALUES ?
-      `;
+    // 4. Update orders status
+    await db.query(`UPDATE orders SET status = 'assigned' WHERE id IN (?)`, [orderIds]);
 
-      const employeeValues = employeeIds.map((empId) => [
-        distributionId,
-        empId,
-      ]);
-
-      db.query(employeeSql, [employeeValues], (err) => {
-        if (err) {
-          console.error("Error assigning employees:", err);
-          return db.rollback(() => {
-            res.status(500).json({ error: "Error assigning employees" });
-          });
-        }
-
-        // 3. Create order assignments
-        const orderSql = `
-          INSERT INTO distribution_order 
-          (fk_distribution_order_distribution, fk_distribution_order_order)
-          VALUES ?
-        `;
-
-        const orderValues = orderIds.map((orderId) => [
-          distributionId,
-          orderId,
-        ]);
-
-        db.query(orderSql, [orderValues], (err) => {
-          if (err) {
-            console.error("Error assigning orders:", err);
-            return db.rollback(() => {
-              res.status(500).json({ error: "Error assigning orders" });
-            });
-          }
-
-          // 4. Update orders status
-          const updateOrdersSql = `
-            UPDATE orders 
-            SET status = 'assigned'
-            WHERE id IN (?)
-          `;
-
-          db.query(updateOrdersSql, [orderIds], (err) => {
-            if (err) {
-              console.error("Error updating order status:", err);
-              return db.rollback(() => {
-                res.status(500).json({ error: "Error updating order status" });
-              });
-            }
-
-            // Commit transaction
-            db.commit((err) => {
-              if (err) {
-                console.error("Error committing transaction:", err);
-                return db.rollback(() => {
-                  res
-                    .status(500)
-                    .json({ error: "Error committing transaction" });
-                });
-              }
-
-              res.status(201).json({
-                id: distributionId,
-                notes,
-                employeeIds,
-                orderIds,
-                message: "Distribution created successfully",
-              });
-            });
-          });
-        });
-      });
+    res.status(201).json({
+      id: distributionId,
+      notes,
+      employeeIds,
+      orderIds,
+      message: "Distribution created successfully",
     });
-  });
+  } catch (error) {
+    console.error('Error creating distribution:', error);
+    res.status(500).json({ error: "Error creating distribution", details: error.message });
+  }
 });
 
 // Start job (set departure time)
@@ -281,19 +213,14 @@ router.post("/:id/start", verifyToken, async (req, res) => {
 });
 
 // End distribution
-router.post("/:id/end", verifyToken, (req, res) => {
-  // First check if distribution exists and is in correct state
-  const checkSql = `
-    SELECT departure_time, arrival_time
-    FROM distribution 
-    WHERE id = ?
-  `;
-
-  db.query(checkSql, [req.params.id], (err, data) => {
-    if (err) {
-      console.error("Error checking distribution:", err);
-      return res.status(500).json({ error: "Error checking distribution status" });
-    }
+router.post("/:id/end", verifyToken, async (req, res) => {
+  try {
+    // Check if distribution exists and is in correct state
+    const [data] = await db.query(`
+      SELECT departure_time, arrival_time
+      FROM distribution 
+      WHERE id = ?
+    `, [req.params.id]);
 
     if (data.length === 0) {
       return res.status(404).json({ error: "Distribution not found" });
@@ -308,61 +235,29 @@ router.post("/:id/end", verifyToken, (req, res) => {
     }
 
     // Update distribution arrival time
-    const sql = `
+    const [result] = await db.query(`
       UPDATE distribution 
       SET arrival_time = CURRENT_TIME()
       WHERE id = ? AND departure_time IS NOT NULL AND arrival_time IS NULL
-    `;
+    `, [req.params.id]);
 
-    db.beginTransaction(err => {
-      if (err) {
-        console.error("Error starting transaction:", err);
-        return res.status(500).json({ error: "Error starting transaction" });
-      }
+    if (result.affectedRows === 0) {
+      return res.status(400).json({ error: "Distribution not started or already ended" });
+    }
 
-      db.query(sql, [req.params.id], (err, result) => {
-        if (err) {
-          return db.rollback(() => {
-            console.error("Error ending distribution:", err);
-            res.status(500).json({ error: "Error ending distribution" });
-          });
-        }
+    // Update orders status to delivered
+    await db.query(`
+      UPDATE orders o
+      JOIN distribution_order do ON do.fk_distribution_order_order = o.id
+      SET o.status = 'delivered'
+      WHERE do.fk_distribution_order_distribution = ?
+    `, [req.params.id]);
 
-        if (result.affectedRows === 0) {
-          return db.rollback(() => {
-            res.status(400).json({ error: "Distribution not started or already ended" });
-          });
-        }
-
-        // Update orders status
-        const updateOrdersSql = `
-          UPDATE orders o
-          JOIN distribution_order do ON do.fk_distribution_order_order = o.id
-          SET o.status = 'delivered'
-          WHERE do.fk_distribution_order_distribution = ?
-        `;
-
-        db.query(updateOrdersSql, [req.params.id], (err) => {
-          if (err) {
-            return db.rollback(() => {
-              console.error("Error updating orders status:", err);
-              res.status(500).json({ error: "Error updating orders status" });
-            });
-          }
-
-          db.commit(err => {
-            if (err) {
-              return db.rollback(() => {
-                console.error("Error committing transaction:", err);
-                res.status(500).json({ error: "Error committing transaction" });
-              });
-            }
-            res.json({ message: "Distribution ended successfully" });
-          });
-        });
-      });
-    });
-  });
+    res.json({ message: "Distribution ended successfully" });
+  } catch (error) {
+    console.error('Error ending distribution:', error);
+    res.status(500).json({ error: "Error ending distribution", details: error.message });
+  }
 });
 
 // Delete distribution (only if not started)
@@ -404,87 +299,43 @@ router.delete("/:id", verifyToken, async (req, res) => {
 });
 
 // Cancel an in-progress distribution
-router.post("/:id/cancel", verifyToken, (req, res) => {
-  db.beginTransaction((err) => {
-    if (err) {
-      console.error("Error starting transaction:", err);
-      return res.status(500).json({ error: "Error canceling distribution" });
-    }
-
+router.post("/:id/cancel", verifyToken, async (req, res) => {
+  try {
     // Check if distribution is in progress
-    const checkSql = `
+    const [data] = await db.query(`
       SELECT departure_time, arrival_time
       FROM distribution 
       WHERE id = ?
-    `;
+    `, [req.params.id]);
 
-    db.query(checkSql, [req.params.id], (err, data) => {
-      if (err) {
-        return db.rollback(() => {
-          console.error("Error checking distribution:", err);
-          res.status(500).json({ error: "Error checking distribution" });
-        });
-      }
+    if (data.length === 0) {
+      return res.status(404).json({ error: "Distribution not found" });
+    }
 
-      if (data.length === 0) {
-        return db.rollback(() => {
-          res.status(404).json({ error: "Distribution not found" });
-        });
-      }
+    if (!data[0].departure_time || data[0].arrival_time) {
+      return res.status(400).json({ error: "Distribution must be in progress to cancel" });
+    }
 
-      if (!data[0].departure_time || data[0].arrival_time) {
-        return db.rollback(() => {
-          res
-            .status(400)
-            .json({ error: "Distribution must be in progress to cancel" });
-        });
-      }
+    // Reset distribution departure time
+    await db.query(`
+      UPDATE distribution
+      SET departure_time = NULL
+      WHERE id = ?
+    `, [req.params.id]);
 
-      // Reset distribution departure time
-      const updateDistributionSql = `
-        UPDATE distribution
-        SET departure_time = NULL
-        WHERE id = ?
-      `;
+    // Update orders status back to assigned
+    await db.query(`
+      UPDATE orders o
+      JOIN distribution_order do ON do.fk_distribution_order_order = o.id
+      SET o.status = 'assigned'
+      WHERE do.fk_distribution_order_distribution = ?
+    `, [req.params.id]);
 
-      db.query(updateDistributionSql, [req.params.id], (err) => {
-        if (err) {
-          return db.rollback(() => {
-            console.error("Error updating distribution:", err);
-            res.status(500).json({ error: "Error updating distribution" });
-          });
-        }
-
-        // Update orders status back to assigned
-        const updateOrdersSql = `
-          UPDATE orders o
-          JOIN distribution_order do ON do.fk_distribution_order_order = o.id
-          SET o.status = 'assigned'
-          WHERE do.fk_distribution_order_distribution = ?
-        `;
-
-        db.query(updateOrdersSql, [req.params.id], (err) => {
-          if (err) {
-            return db.rollback(() => {
-              console.error("Error updating orders status:", err);
-              res.status(500).json({ error: "Error updating orders status" });
-            });
-          }
-
-          db.commit((err) => {
-            if (err) {
-              return db.rollback(() => {
-                console.error("Error committing transaction:", err);
-                res.status(500).json({ error: "Error committing transaction" });
-              });
-            }
-
-            res.json({ message: "Distribution canceled successfully" });
-          });
-        });
-      });
-    });
-  });
+    res.json({ message: "Distribution canceled successfully" });
+  } catch (error) {
+    console.error('Error canceling distribution:', error);
+    res.status(500).json({ error: "Error canceling distribution", details: error.message });
+  }
 });
 
 export default router;
