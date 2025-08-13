@@ -23,17 +23,27 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: [
-    'http://localhost:5173',
-    'https://king-products.vercel.app',
-    'https://king-products-git-main-danger-boys-projects.vercel.app'
-  ],
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if(!origin) return callback(null, true);
+    
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'https://king-products.vercel.app',
+      'https://king-products-git-main-danger-boys-projects.vercel.app'
+    ];
+    
+    if(allowedOrigins.indexOf(origin) === -1){
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
@@ -54,8 +64,17 @@ app.use("/api/dashboard", dashboardRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: "Something broke!" });
+  console.error(`Error occurred at ${new Date().toISOString()}:`);
+  console.error('Request URL:', req.originalUrl);
+  console.error('Request Method:', req.method);
+  console.error('Error Stack:', err.stack);
+
+  // Send detailed error in development, generic in production
+  const error = process.env.NODE_ENV === 'development' 
+    ? { message: err.message, stack: err.stack }
+    : { message: 'An unexpected error occurred' };
+
+  res.status(err.status || 500).json({ error });
 });
 
 // Root route
