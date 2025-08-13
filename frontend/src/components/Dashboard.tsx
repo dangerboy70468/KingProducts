@@ -1,4 +1,5 @@
 
+import { useState, useEffect } from "react";
 import {
   PackageIcon,
   UsersIcon,
@@ -186,7 +187,7 @@ export const Dashboard = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {recentOrders.map((order) => (
+              {recentOrders.map((order: any) => (
                 <tr key={order.id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {order.id}

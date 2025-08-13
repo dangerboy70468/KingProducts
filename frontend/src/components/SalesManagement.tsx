@@ -122,7 +122,6 @@ export const SalesManagement = () => {
       ] = await Promise.all(apiCalls);
 
       console.log('Sales Summary Response:', summaryRes.data);
-      console.log('Sales by Product Response:', salesByProductRes.data);
       console.log('Monthly Trend Response:', monthlyTrendRes.data);
       console.log('Top Products Response:', topProductsRes.data);
 
