@@ -10,12 +10,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function initializeDatabase() {
+    // Log connection details (remove sensitive info in production)
+    console.log('Attempting to connect with following config:', {
+        host: "switchback.proxy.rlwy.net",
+        user: "root",
+        database: "railway",
+        port: 36399
+    });
+
     const connection = await mysql.createConnection({
-        host: process.env.MYSQLHOST || process.env.DB_HOST,
-        user: process.env.MYSQLUSER || process.env.DB_USER,
-        password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD,
-        database: process.env.MYSQLDATABASE || process.env.DB_NAME,
-        port: process.env.MYSQLPORT || process.env.DB_PORT,
+        host: "switchback.proxy.rlwy.net",
+        user: "root",
+        password: "aUsyGZHcMGJGlvdgNLAElxqxnrltXUED",
+        database: "railway",
+        port: 36399,
+        ssl: {
+            rejectUnauthorized: false
+        }
     });
 
     try {
