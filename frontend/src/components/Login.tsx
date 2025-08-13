@@ -13,18 +13,39 @@ export const Login = () => {
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
+    
+    // Log the current state
+    console.log('Attempting login with:', { ...credentials, password: '****' });
+    
     try {
+      console.log('Making API request to:', `${api.defaults.baseURL}/auth/login`);
       const response = await api.post("/auth/login", credentials);
-      if (response.data.success && response.data.token) {
+      console.log('Login response:', response.data);
+      
+      if (response.data.token) {
         // Store the JWT token
         localStorage.setItem("token", response.data.token);
+        console.log('Token stored, navigating to dashboard');
         // Navigate to dashboard
         navigate("/dashboard");
       } else {
+        console.error('Invalid response format:', response.data);
         setError("Invalid login response from server");
       }
     } catch (error: any) {
-      console.error("Login error:", error);
+      console.error('Detailed login error:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        headers: error.response?.headers,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          baseURL: error.config?.baseURL,
+          headers: error.config?.headers
+        }
+      });
+      
       if (error.response?.data?.message) {
         setError(error.response.data.message);
       } else if (error.message) {

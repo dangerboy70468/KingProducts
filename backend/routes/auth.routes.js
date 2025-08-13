@@ -8,21 +8,24 @@ const router = express.Router();
 // Login
 router.post("/login", async (req, res) => {
   const { username, password } = req.body;
+  console.log('Login attempt received:', { username, timestamp: new Date().toISOString() });
 
-  const sql = "SELECT * FROM admin_login WHERE username = ?";
-  db.query(sql, [username], async (err, data) => {
-    if (err) {
-      return res.status(500).json({ error: "Login error" });
-    }
-
-    if (data.length === 0) {
+  try {
+    const sql = "SELECT * FROM admin_login WHERE username = ?";
+    const [rows] = await db.query(sql, [username]);
+    
+    if (rows.length === 0) {
+      console.log('No user found with username:', username);
       return res
         .status(401)
         .json({ success: false, message: "Invalid credentials" });
     }
 
-    const admin = data[0]; // Direct comparison of plain text passwords
+    const admin = rows[0];
+    console.log('User found, verifying password');
+    
     if (password !== admin.password) {
+      console.log('Invalid password for username:', username);
       return res
         .status(401)
         .json({ success: false, message: "Invalid credentials" });
@@ -35,6 +38,7 @@ router.post("/login", async (req, res) => {
       { expiresIn: "24h" }
     );
 
+    console.log('Login successful for:', username);
     res.status(200).json({
       success: true,
       token,
@@ -43,7 +47,14 @@ router.post("/login", async (req, res) => {
         username: admin.username,
       },
     });
-  });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: "An error occurred during login",
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
 });
 
 // Get current admin
