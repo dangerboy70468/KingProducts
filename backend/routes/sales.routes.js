@@ -118,29 +118,25 @@ router.get("/range", verifyToken, (req, res) => {
 });
 
 // Get sales by product
-router.get("/by-product", verifyToken, (req, res) => {
-  const sql = `
-    SELECT 
-      p.id as product_id,
-      p.name as product_name,
-      COUNT(*) as order_count,
-      COALESCE(SUM(o.qty), 0) as total_quantity,
-      CAST(COALESCE(SUM(CASE 
-        WHEN o.total_price IS NULL OR o.total_price = 0 THEN o.qty * o.unit_price
-        ELSE o.total_price 
-      END), 0) AS DECIMAL(10,2)) as total_sales
-    FROM orders o
-    JOIN product p ON o.fk_order_product = p.id
-    WHERE LOWER(TRIM(o.status)) = 'delivered'
-    GROUP BY p.id, p.name
-    ORDER BY total_sales DESC
-  `;
-  db.query(sql, (err, data) => {
-    if (err) {
-      console.error('Error fetching sales by product:', err);
-      return res.status(500).json({ error: "Error fetching sales by product" });
-    }
-    // Convert string numbers to actual numbers
+router.get("/by-product", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT 
+        p.id as product_id,
+        p.name as product_name,
+        COUNT(*) as order_count,
+        COALESCE(SUM(o.qty), 0) as total_quantity,
+        CAST(COALESCE(SUM(CASE 
+          WHEN o.total_price IS NULL OR o.total_price = 0 THEN o.qty * o.unit_price
+          ELSE o.total_price 
+        END), 0) AS DECIMAL(10,2)) as total_sales
+      FROM orders o
+      JOIN product p ON o.fk_order_product = p.id
+      WHERE o.status = 'delivered'
+      GROUP BY p.id, p.name
+      ORDER BY total_sales DESC
+    `);
+    
     const result = data.map(row => ({
       ...row,
       total_sales: Number(row.total_sales),
@@ -148,7 +144,10 @@ router.get("/by-product", verifyToken, (req, res) => {
       order_count: Number(row.order_count)
     }));
     res.json(result);
-  });
+  } catch (error) {
+    console.error('Error fetching sales by product:', error);
+    res.status(500).json({ error: "Error fetching sales by product", details: error.message });
+  }
 });
 
 // Get sales by client
@@ -177,31 +176,27 @@ router.get("/by-client", verifyToken, (req, res) => {
 });
 
 // Get monthly sales trend
-router.get("/monthly-trend", verifyToken, (req, res) => {
-  const sql = `
-    SELECT 
-      DATE_FORMAT(date, '%Y-%m') as month,
-      COUNT(*) as total_orders,
-      CAST(COALESCE(SUM(CASE 
-        WHEN total_price IS NULL OR total_price = 0 THEN qty * unit_price
-        ELSE total_price 
-      END), 0) AS DECIMAL(10,2)) as total_sales,
-      CAST(COALESCE(AVG(CASE 
-        WHEN total_price IS NULL OR total_price = 0 THEN qty * unit_price
-        ELSE total_price 
-      END), 0) AS DECIMAL(10,2)) as average_order_value
-    FROM orders
-    WHERE LOWER(TRIM(status)) = 'delivered'
-    GROUP BY DATE_FORMAT(date, '%Y-%m')
-    ORDER BY month DESC
-    LIMIT 12
-  `;
-  db.query(sql, (err, data) => {
-    if (err) {
-      console.error('Error fetching monthly sales trend:', err);
-      return res.status(500).json({ error: "Error fetching monthly sales trend" });
-    }
-    // Convert string numbers to actual numbers
+router.get("/monthly-trend", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT 
+        DATE_FORMAT(date, '%Y-%m') as month,
+        COUNT(*) as total_orders,
+        CAST(COALESCE(SUM(CASE 
+          WHEN total_price IS NULL OR total_price = 0 THEN qty * unit_price
+          ELSE total_price 
+        END), 0) AS DECIMAL(10,2)) as total_sales,
+        CAST(COALESCE(AVG(CASE 
+          WHEN total_price IS NULL OR total_price = 0 THEN qty * unit_price
+          ELSE total_price 
+        END), 0) AS DECIMAL(10,2)) as average_order_value
+      FROM orders
+      WHERE status = 'delivered'
+      GROUP BY DATE_FORMAT(date, '%Y-%m')
+      ORDER BY month DESC
+      LIMIT 12
+    `);
+    
     const result = data.map(row => ({
       ...row,
       total_sales: Number(row.total_sales),
@@ -209,7 +204,10 @@ router.get("/monthly-trend", verifyToken, (req, res) => {
       total_orders: Number(row.total_orders)
     }));
     res.json(result);
-  });
+  } catch (error) {
+    console.error('Error fetching monthly sales trend:', error);
+    res.status(500).json({ error: "Error fetching monthly sales trend", details: error.message });
+  }
 });
 
 // Get top selling products
@@ -249,55 +247,52 @@ router.get("/top-products", verifyToken, (req, res) => {
 });
 
 // Get production cost for completed orders
-router.get("/production-cost", verifyToken, (req, res) => {
-  const sql = `
-    SELECT 
-      CAST(COALESCE(SUM(
-        CASE
-          WHEN b.init_qty > 0 THEN CAST(b.cost * (bo.qty / b.init_qty) AS DECIMAL(10,2))
-          ELSE 0
-        END
-      ), 0) AS DECIMAL(10,2)) as total_production_cost
-    FROM orders o
-    JOIN batch_order bo ON o.id = bo.fk_batch_order_order
-    JOIN batch b ON bo.fk_batch_order_batch = b.id
-    WHERE LOWER(TRIM(o.status)) = 'delivered'
-  `;
-  db.query(sql, (err, data) => {
-    if (err) {
-      console.error('Error fetching production cost:', err);
-      return res.status(500).json({ error: "Error fetching production cost" });
-    }
-    // Convert string number to actual number
+router.get("/production-cost", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT 
+        CAST(COALESCE(SUM(
+          CASE
+            WHEN b.init_qty > 0 THEN CAST(b.cost * (bo.qty / b.init_qty) AS DECIMAL(10,2))
+            ELSE 0
+          END
+        ), 0) AS DECIMAL(10,2)) as total_production_cost
+      FROM orders o
+      JOIN batch_order bo ON o.id = bo.fk_batch_order_order
+      JOIN batch b ON bo.fk_batch_order_batch = b.id
+      WHERE o.status = 'delivered'
+    `);
+    
     const result = {
       total_production_cost: Number(data[0].total_production_cost)
     };
     res.json(result);
-  });
+  } catch (error) {
+    console.error('Error fetching production cost:', error);
+    res.status(500).json({ error: "Error fetching production cost", details: error.message });
+  }
 });
 
 // Get total orders (all statuses)
-router.get("/total-orders", verifyToken, (req, res) => {
-  const sql = `SELECT COUNT(*) as total_orders FROM orders`;
-  db.query(sql, (err, data) => {
-    if (err) {
-      console.error('Error fetching total orders:', err);
-      return res.status(500).json({ error: "Error fetching total orders" });
-    }
+router.get("/total-orders", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`SELECT COUNT(*) as total_orders FROM orders`);
     res.json(data[0]);
-  });
+  } catch (error) {
+    console.error('Error fetching total orders:', error);
+    res.status(500).json({ error: "Error fetching total orders", details: error.message });
+  }
 });
 
 // Get total delivered orders
-router.get("/total-delivered-orders", verifyToken, (req, res) => {
-  const sql = `SELECT COUNT(*) as total_delivered_orders FROM orders WHERE status = 'delivered'`;
-  db.query(sql, (err, data) => {
-    if (err) {
-      console.error('Error fetching total delivered orders:', err);
-      return res.status(500).json({ error: "Error fetching total delivered orders" });
-    }
+router.get("/total-delivered-orders", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`SELECT COUNT(*) as total_delivered_orders FROM orders WHERE status = 'delivered'`);
     res.json(data[0]);
-  });
+  } catch (error) {
+    console.error('Error fetching total delivered orders:', error);
+    res.status(500).json({ error: "Error fetching total delivered orders", details: error.message });
+  }
 });
 
 export default router;
