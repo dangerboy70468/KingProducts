@@ -58,37 +58,36 @@ router.get("/:id", verifyToken, async (req, res) => {
 });
 
 // Create batch
-router.post("/", verifyToken, validateBatch, (req, res) => {
-  const {
-    fk_batch_product,
-    batch_number,
-    mfg_date,
-    exp_date,
-    init_qty,
-    cost,
-    description,
-  } = req.body;
+router.post("/", verifyToken, validateBatch, async (req, res) => {
+  try {
+    const {
+      fk_batch_product,
+      batch_number,
+      mfg_date,
+      exp_date,
+      init_qty,
+      cost,
+      description,
+    } = req.body;
 
-  // Format dates for MySQL datetime and ensure proper number formatting
-  const mfgDate = new Date(mfg_date)
-    .toISOString()
-    .slice(0, 19)
-    .replace("T", " ");
-  const expDate = new Date(exp_date)
-    .toISOString()
-    .slice(0, 19)
-    .replace("T", " ");
-  const quantity = parseInt(init_qty);
-  const batchCost = parseFloat(cost).toFixed(2);
-  const sql = `
-    INSERT INTO batch (
-      fk_batch_product, batch_number, mfg_date,
-      exp_date, init_qty, qty, cost, description
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `;
-  db.query(
-    sql,
-    [
+    // Format dates for MySQL datetime and ensure proper number formatting
+    const mfgDate = new Date(mfg_date)
+      .toISOString()
+      .slice(0, 19)
+      .replace("T", " ");
+    const expDate = new Date(exp_date)
+      .toISOString()
+      .slice(0, 19)
+      .replace("T", " ");
+    const quantity = parseInt(init_qty);
+    const batchCost = parseFloat(cost).toFixed(2);
+
+    const [result] = await db.query(`
+      INSERT INTO batch (
+        fk_batch_product, batch_number, mfg_date,
+        exp_date, init_qty, qty, cost, description
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
       parseInt(fk_batch_product),
       batch_number,
       mfgDate,
@@ -97,46 +96,34 @@ router.post("/", verifyToken, validateBatch, (req, res) => {
       quantity, // Set initial qty as qty
       batchCost,
       description || null,
-    ],
-    (err, result) => {
-      if (err) {
-        // Log detailed error information
-        console.error("Database error in batch creation:", {
-          error: err,
-          message: err.message,
-          code: err.code,
-          sqlState: err.sqlState,
-          sql: err.sql,
-          payload: req.body,
-        });
+    ]);
 
-        if (err.code === "ER_DUP_ENTRY") {
-          return res.status(400).json({
-            error: "Batch number already exists",
-            details: err.message,
-          });
-        }
+    res.status(201).json({
+      id: result.insertId,
+      ...req.body,
+    });
+  } catch (error) {
+    console.error("Database error in batch creation:", error);
 
-        if (err.code === "ER_NO_REFERENCED_ROW_2") {
-          return res.status(400).json({
-            error: "Invalid product reference",
-            details: "The specified product does not exist",
-          });
-        }
-
-        return res.status(500).json({
-          error: "Error creating batch",
-          details: err.message,
-          code: err.code,
-        });
-      }
-
-      res.status(201).json({
-        id: result.insertId,
-        ...req.body,
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(400).json({
+        error: "Batch number already exists",
+        details: error.message,
       });
     }
-  );
+
+    if (error.code === "ER_NO_REFERENCED_ROW_2") {
+      return res.status(400).json({
+        error: "Invalid product reference",
+        details: "The specified product does not exist",
+      });
+    }
+
+    res.status(500).json({
+      error: "Error creating batch",
+      details: error.message,
+    });
+  }
 });
 
 // Update batch
@@ -191,20 +178,21 @@ router.delete("/:id", verifyToken, (req, res) => {
 });
 
 // Get batch orders
-router.get("/:id/orders", verifyToken, (req, res) => {
-  const sql = `
-    SELECT bo.*, o.*, p.name as product_name, c.name as client_name
-    FROM batch_order bo
-    JOIN orders o ON bo.fk_batch_order_order = o.id
-    JOIN product p ON o.fk_order_product = p.id
-    JOIN client c ON o.fk_order_client = c.id
-    WHERE bo.fk_batch_order_batch = ?
-  `;
-  db.query(sql, [req.params.id], (err, data) => {
-    if (err)
-      return res.status(500).json({ error: "Error fetching batch orders" });
+router.get("/:id/orders", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT bo.*, o.*, p.name as product_name, c.name as client_name
+      FROM batch_order bo
+      JOIN orders o ON bo.fk_batch_order_order = o.id
+      JOIN product p ON o.fk_order_product = p.id
+      JOIN client c ON o.fk_order_client = c.id
+      WHERE bo.fk_batch_order_batch = ?
+    `, [req.params.id]);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching batch orders:', error);
+    res.status(500).json({ error: "Error fetching batch orders", details: error.message });
+  }
 });
 
 // Add order to batch

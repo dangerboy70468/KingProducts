@@ -7,47 +7,47 @@ import { updateOrderTotalPrice } from "./order.routes.js";
 const router = express.Router();
 
 // Get all batch-order assignments
-router.get("/", verifyToken, (req, res) => {
-  const sql = `
-    SELECT bo.*, 
-           b.batch_number,
-           o.date as order_date,
-           p.name as product_name,
-           c.name as client_name
-    FROM batch_order bo
-    JOIN batch b ON bo.fk_batch_order_batch = b.id
-    JOIN orders o ON bo.fk_batch_order_order = o.id
-    JOIN product p ON o.fk_order_product = p.id
-    JOIN client c ON o.fk_order_client = c.id
-  `;
-  db.query(sql, (err, data) => {
-    if (err)
-      return res
-        .status(500)
-        .json({ error: "Error fetching batch-order assignments" });
+router.get("/", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT bo.*, 
+             b.batch_number,
+             o.date as order_date,
+             p.name as product_name,
+             c.name as client_name
+      FROM batch_order bo
+      JOIN batch b ON bo.fk_batch_order_batch = b.id
+      JOIN orders o ON bo.fk_batch_order_order = o.id
+      JOIN product p ON o.fk_order_product = p.id
+      JOIN client c ON o.fk_order_client = c.id
+    `);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching batch-order assignments:', error);
+    res.status(500).json({ error: "Error fetching batch-order assignments", details: error.message });
+  }
 });
 
 // Get batch-order assignments by batch
-router.get("/batch/:batchId", verifyToken, (req, res) => {
-  const sql = `
-    SELECT bo.*, 
-           o.date as order_date,
-           o.qty as order_qty,
-           o.unit_price,
-           o.total_price,
-           c.name as client_name
-    FROM batch_order bo
-    JOIN orders o ON bo.fk_batch_order_order = o.id
-    JOIN client c ON o.fk_order_client = c.id
-    WHERE bo.fk_batch_order_batch = ?
-  `;
-  db.query(sql, [req.params.batchId], (err, data) => {
-    if (err)
-      return res.status(500).json({ error: "Error fetching batch orders" });
+router.get("/batch/:batchId", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT bo.*, 
+             o.date as order_date,
+             o.qty as order_qty,
+             o.unit_price,
+             o.total_price,
+             c.name as client_name
+      FROM batch_order bo
+      JOIN orders o ON bo.fk_batch_order_order = o.id
+      JOIN client c ON o.fk_order_client = c.id
+      WHERE bo.fk_batch_order_batch = ?
+    `, [req.params.batchId]);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching batch orders:', error);
+    res.status(500).json({ error: "Error fetching batch orders", details: error.message });
+  }
 });
 
 // Get batch-order assignments by order
