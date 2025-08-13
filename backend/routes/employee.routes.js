@@ -4,45 +4,79 @@ import db from "../config/db.config.js";
 
 const router = express.Router();
 
+// Health check route
+router.get("/health", async (req, res) => {
+  try {
+    const result = await new Promise((resolve, reject) => {
+      db.query('SELECT 1 as test', (err, results) => {
+        if (err) reject(err);
+        else resolve(results);
+      });
+    });
+    res.json({ status: 'ok', database: 'connected', test: result[0] });
+  } catch (error) {
+    console.error('Database health check failed:', error);
+    res.status(500).json({ status: 'error', database: 'disconnected', error: error.message });
+  }
+});
+
 // Get all employees
 router.get("/employees", verifyToken, async (req, res) => {
   try {
+    console.log('Fetching employees...');
     const sql = `
-      SELECT e.*, et.name as type_name 
+      SELECT e.*, COALESCE(et.name, 'Unknown') as type_name 
       FROM employee e 
       LEFT JOIN employee_type et ON e.type_id = et.id
     `;
     
     const results = await new Promise((resolve, reject) => {
       db.query(sql, (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
+        if (err) {
+          console.error('Database query error:', err);
+          reject(err);
+        } else {
+          console.log('Query successful, rows:', results.length);
+          resolve(results);
+        }
       });
     });
     
     res.json(results);
   } catch (error) {
     console.error('Error in /employees:', error);
-    res.status(500).json({ error: "Error fetching employees" });
+    res.status(500).json({ 
+      error: "Error fetching employees",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
 // Get all employee types
 router.get("/employee-types", verifyToken, async (req, res) => {
   try {
-    const sql = "SELECT * FROM employee_type";
+    console.log('Fetching employee types...');
+    const sql = "SELECT * FROM employee_type ORDER BY id";
     
     const results = await new Promise((resolve, reject) => {
       db.query(sql, (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
+        if (err) {
+          console.error('Database query error:', err);
+          reject(err);
+        } else {
+          console.log('Query successful, rows:', results.length);
+          resolve(results);
+        }
       });
     });
     
     res.json(results);
   } catch (error) {
     console.error('Error in /employee-types:', error);
-    res.status(500).json({ error: "Error fetching employee types" });
+    res.status(500).json({ 
+      error: "Error fetching employee types",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
