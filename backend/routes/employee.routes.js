@@ -5,37 +5,47 @@ import db from "../config/db.config.js";
 const router = express.Router();
 
 // Get all employees
-router.get("/employees", verifyToken, async (req, res) => {
-  const sql = `
-    SELECT e.*, et.name as type_name 
-    FROM employee e 
-    LEFT JOIN employee_type et ON e.type_id = et.id
-  `;
+router.get("/employees", verifyToken, (req, res) => {
+  try {
+    const sql = `
+      SELECT e.*, et.name as type_name 
+      FROM employee e 
+      LEFT JOIN employee_type et ON e.type_id = et.id
+    `;
 
-  db.query(sql, (err, results) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Error fetching employees" });
-    }
-    res.json(results);
-  });
+    db.query(sql, (err, results) => {
+      if (err) {
+        console.error('Database error in /employees:', err);
+        return res.status(500).json({ error: "Error fetching employees" });
+      }
+      res.json(results);
+    });
+  } catch (error) {
+    console.error('Route error in /employees:', error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // Get all employee types
-router.get("/employee-types", verifyToken, async (req, res) => {
-  const sql = "SELECT * FROM employee_type";
+router.get("/employee-types", verifyToken, (req, res) => {
+  try {
+    const sql = "SELECT * FROM employee_type";
 
-  db.query(sql, (err, results) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Error fetching employee types" });
-    }
-    res.json(results);
-  });
+    db.query(sql, (err, results) => {
+      if (err) {
+        console.error('Database error in /employee-types:', err);
+        return res.status(500).json({ error: "Error fetching employee types" });
+      }
+      res.json(results);
+    });
+  } catch (error) {
+    console.error('Route error in /employee-types:', error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 // Add new employee type
-router.post("/employee-types", verifyToken, async (req, res) => {
+router.post("/employee-types", verifyToken, (req, res) => {
   const { name, description, basic_salary } = req.body;
 
   if (!name) {
@@ -65,7 +75,7 @@ router.post("/employee-types", verifyToken, async (req, res) => {
 });
 
 // Update employee type
-router.put("/employee-types/:id", verifyToken, async (req, res) => {
+router.put("/employee-types/:id", verifyToken, (req, res) => {
   const { id } = req.params;
   const { name, description, basic_salary } = req.body;
 
@@ -99,7 +109,7 @@ router.put("/employee-types/:id", verifyToken, async (req, res) => {
 });
 
 // Add new employee
-router.post("/employees", verifyToken, async (req, res) => {
+router.post("/employees", verifyToken, (req, res) => {
   try {
     const { name, type_id, nic, acc_no, dob, email, password, phone1, phone2 } =
       req.body;
@@ -207,7 +217,7 @@ router.post("/employees", verifyToken, async (req, res) => {
 });
 
 // Update employee
-router.put("/employees/:id", verifyToken, async (req, res) => {
+router.put("/employees/:id", verifyToken, (req, res) => {
   const { id } = req.params;
   const { name, type_id, nic, acc_no, dob, email, phone1, phone2 } = req.body;
 
@@ -218,7 +228,7 @@ router.put("/employees/:id", verifyToken, async (req, res) => {
 
   // Check for existing email except current employee
   const checkEmailSql = "SELECT id FROM employee WHERE email = ? AND id != ?";
-  db.query(checkEmailSql, [email, id], async (err, results) => {
+  db.query(checkEmailSql, [email, id], (err, results) => {
     if (err) {
       console.error(err);
       return res.status(500).json({ error: "Error checking email" });
@@ -253,7 +263,7 @@ router.put("/employees/:id", verifyToken, async (req, res) => {
 });
 
 // Delete employee
-router.delete("/employees/:id", verifyToken, async (req, res) => {
+router.delete("/employees/:id", verifyToken, (req, res) => {
   const { id } = req.params;
 
   const sql = "DELETE FROM employee WHERE id = ?";
