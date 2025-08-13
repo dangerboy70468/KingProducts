@@ -74,17 +74,12 @@ router.get("/order/:orderId", verifyToken, async (req, res) => {
 });
 
 // Assign order to batch
-router.post("/", verifyToken, validateBatchOrder, (req, res) => {
-  const { fk_batch_order_batch, fk_batch_order_order, qty, description } =
-    req.body;
+router.post("/", verifyToken, validateBatchOrder, async (req, res) => {
+  try {
+    const { fk_batch_order_batch, fk_batch_order_order, qty, description } = req.body;
 
-  // Disable safe updates
-  db.query("SET SQL_SAFE_UPDATES = 0", (safeErr) => {
-    if (safeErr)
-      return res.status(500).json({ error: "Error disabling safe updates" });
-
-    // First check if batch has enough quantity available
-    const checkBatchSql = `
+    // Check if batch has enough quantity available
+    const [batchData] = await db.query(`
       SELECT 
         b.init_qty - COALESCE(SUM(CASE 
           WHEN bo.fk_batch_order_order != ? THEN bo.qty 
@@ -96,151 +91,52 @@ router.post("/", verifyToken, validateBatchOrder, (req, res) => {
       LEFT JOIN batch_order bo ON b.id = bo.fk_batch_order_batch
       WHERE b.id = ?
       GROUP BY b.id, b.init_qty
-    `;
+    `, [fk_batch_order_order, fk_batch_order_batch]);
 
-    db.query(
-      checkBatchSql,
-      [fk_batch_order_order, fk_batch_order_batch],
-      (err, batchData) => {
-        if (err) {
-          db.query("SET SQL_SAFE_UPDATES = 1");
-          return res
-            .status(500)
-            .json({ error: "Error checking batch quantity" });
-        }
-        if (batchData.length === 0) {
-          db.query("SET SQL_SAFE_UPDATES = 1");
-          return res.status(404).json({ message: "Batch not found" });
-        }
+    if (batchData.length === 0) {
+      return res.status(404).json({ message: "Batch not found" });
+    }
 
-        const availableQty = batchData[0].available_qty;
-        if (availableQty < qty) {
-          db.query("SET SQL_SAFE_UPDATES = 1");
-          return res.status(400).json({
-            error: "Insufficient quantity in batch",
-            available: availableQty,
-            assigned: batchData[0].assigned_qty,
-            total: batchData[0].init_qty,
-            requested: qty,
-          });
-        }
+    const availableQty = batchData[0].available_qty;
+    if (availableQty < qty) {
+      return res.status(400).json({
+        error: "Insufficient quantity in batch",
+        available: availableQty,
+        assigned: batchData[0].assigned_qty,
+        total: batchData[0].init_qty,
+        requested: qty,
+      });
+    }
 
-        // If quantity is available, create or update the assignment
-        const insertSql = `
-        INSERT INTO batch_order (fk_batch_order_batch, fk_batch_order_order, qty, description)
-        VALUES (?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE qty = qty + VALUES(qty), description = VALUES(description)
-      `;
+    // Create the assignment
+    const [result] = await db.query(`
+      INSERT INTO batch_order (fk_batch_order_batch, fk_batch_order_order, qty, description)
+      VALUES (?, ?, ?, ?)
+    `, [fk_batch_order_batch, fk_batch_order_order, qty, description || null]);
 
-        db.query(
-          insertSql,
-          [
-            fk_batch_order_batch,
-            fk_batch_order_order,
-            qty,
-            description || null,
-          ],
-          (err, result) => {
-            if (err) {
-              db.query("SET SQL_SAFE_UPDATES = 1");
-              // Check for duplicates or other errors
-              if (err.code === "ER_DUP_ENTRY") {
-                return res.status(400).json({
-                  error: "This batch is already assigned to this order",
-                  batch_id: fk_batch_order_batch,
-                  order_id: fk_batch_order_order,
-                });
-              }
-              return res
-                .status(500)
-                .json({ error: "Error assigning order to batch" });
-            }
+    // Update the batch quantity
+    await db.query(`UPDATE batch SET qty = qty - ? WHERE id = ?`, [qty, fk_batch_order_batch]);
 
-            // Update the batch quantity
-            const updateBatchSql = `UPDATE batch SET qty = qty - ? WHERE id = ?`;
-            db.query(
-              updateBatchSql,
-              [qty, fk_batch_order_batch],
-              (updateErr) => {
-                if (updateErr) {
-                  db.query("SET SQL_SAFE_UPDATES = 1");
-                  console.error("Error updating batch quantity:", updateErr);
-                  return res.status(500).json({
-                    error:
-                      "Assignment created, but failed to update batch quantity.",
-                    assignment_id: result.insertId,
-                  });
-                }
+    // Update order status to 'assigned'
+    await db.query(`UPDATE orders SET status = 'assigned' WHERE id = ?`, [fk_batch_order_order]);
 
-                // Calculate diff_qty
-                const updateDiffQtySql = `
-            UPDATE batch_order bo
-            JOIN orders o ON bo.fk_batch_order_order = o.id
-            SET bo.diff_qty = bo.qty - o.qty
-            WHERE bo.fk_batch_order_batch = ? AND bo.fk_batch_order_order = ?
-          `;
-
-                db.query(
-                  updateDiffQtySql,
-                  [fk_batch_order_batch, fk_batch_order_order],
-                  (diffErr) => {
-                    if (diffErr) {
-                      console.error("Error updating diff_qty:", diffErr);
-                    }
-
-                    // Update order status to 'assigned'
-                    const updateOrderStatusSql = `UPDATE orders SET status = 'assigned' WHERE id = ?`;
-                    db.query(
-                      updateOrderStatusSql,
-                      [fk_batch_order_order],
-                      (orderStatusErr) => {
-                        if (orderStatusErr) {
-                          db.query("SET SQL_SAFE_UPDATES = 1");
-                          console.error(
-                            "Error updating order status:",
-                            orderStatusErr
-                          );
-                          return res.status(500).json({
-                            error:
-                              "Assignment created and batch updated, but failed to update order status.",
-                          });
-                        }
-
-                        // Re-enable safe updates
-                        db.query("SET SQL_SAFE_UPDATES = 1", (safeErr) => {
-                          if (safeErr) {
-                            console.error(
-                              "Error enabling safe updates:",
-                              safeErr
-                            );
-                          }
-
-                          const action =
-                            result.affectedRows === 1 && result.insertId > 0
-                              ? "created"
-                              : "updated";
-                          // Update order total_price after batch assignment
-                          updateOrderTotalPrice(fk_batch_order_order, () => {
-                            res.status(action === "created" ? 201 : 200).json({
-                              message: `Batch-order assignment ${action}, batch quantity, and order status updated successfully`,
-                              batch_id: fk_batch_order_batch,
-                              order_id: fk_batch_order_order,
-                              qty,
-                              action,
-                            });
-                          });
-                        });
-                      }
-                    );
-                  }
-                );
-              }
-            );
-          }
-        );
-      }
-    );
-  });
+    res.status(201).json({
+      message: "Batch-order assignment created successfully",
+      batch_id: fk_batch_order_batch,
+      order_id: fk_batch_order_order,
+      qty,
+    });
+  } catch (error) {
+    console.error('Error assigning order to batch:', error);
+    
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(400).json({
+        error: "This batch is already assigned to this order",
+      });
+    }
+    
+    res.status(500).json({ error: "Error assigning order to batch", details: error.message });
+  }
 });
 
 // Update batch-order assignment
