@@ -113,12 +113,12 @@ export const SalesManagement = () => {
       // Execute all API calls in parallel
       const [
         summaryRes,
-        salesByProductRes,
+        ,
         monthlyTrendRes,
         topProductsRes,
         productionCostRes,
-        totalOrdersRes,
-        deliveredOrdersRes,
+        ,
+        ,
       ] = await Promise.all(apiCalls);
 
       console.log('Sales Summary Response:', summaryRes.data);

@@ -232,7 +232,7 @@ export const OrderManagement = () => {
         };
 
         if (editingOrder) {
-          const response = await api.put(
+          await api.put(
             `/orders/${editingOrder.id}`,
             orderData
           );
@@ -372,11 +372,11 @@ export const OrderManagement = () => {
     setDetailsOrder(order);
     setShowDetailsModal(true);
     try {
-      await api.get(`/batch-orders/order/${order.id}`);
-      setBatchAssignments(response.data);
+      const batchResponse = await api.get(`/batch-orders/order/${order.id}`);
+      setBatchAssignments(batchResponse.data);
 
       // Calculate total qty including batch differences
-      const totalQtyDiff = response.data.reduce(
+      const totalQtyDiff = batchResponse.data.reduce(
         (acc: number, batch: any) => acc + (batch.diff_qty || 0),
         0
       );
@@ -398,38 +398,7 @@ export const OrderManagement = () => {
     }
   };
 
-  // Inside the order details modal, add this section
-  const BatchAssignmentsSection = () => (
-    <div className="border-t pt-4">
-      <h4 className="font-semibold text-gray-700 mb-3">Batch Assignments</h4>
-      {batchAssignments.length > 0 ? (
-        <div className="space-y-3">
-          {batchAssignments.map((assignment) => (
-            <div key={assignment.id} className="bg-gray-50 p-3 rounded-lg">
-              <div className="flex justify-between items-center mb-2">
-                <span className="font-medium">
-                  Batch: {assignment.batch_number}
-                </span>
-                <span className="text-sm text-gray-600">
-                  Qty: {assignment.qty}
-                </span>
-              </div>
-              {assignment.description && (
-                <div className="mt-2 text-sm text-gray-600">
-                  <p className="font-medium">Description:</p>
-                  <p className="mt-1">{assignment.description}</p>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-gray-500 bg-gray-50 p-4 rounded-lg">
-          No batch assignments for this order.
-        </p>
-      )}
-    </div>
-  );
+
   return (
     <>
       <div className="space-y-6">

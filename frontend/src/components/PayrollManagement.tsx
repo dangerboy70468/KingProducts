@@ -76,28 +76,20 @@ export const PayrollManagement = () => {
   }, [selectedMonth, activeTab]);
 
   const fetchPayroll = async () => {
-    setLoading(true);
-    setError(null);
     try {
       const res = await api.get(`/payroll/calculate?month=${selectedMonth}`);
       setPayroll(res.data);
     } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to fetch payroll data.");
-    } finally {
-      setLoading(false);
+      console.error("Failed to fetch payroll data:", err);
     }
   };
 
   const fetchPayrollRecords = async () => {
-    setLoading(true);
-    setError(null);
     try {
       const res = await api.get(`/payroll?month=${selectedMonth}`);
       setPayrollRecords(res.data);
     } catch (err: any) {
-      setError(err.response?.data?.error || "Failed to fetch payroll history.");
-    } finally {
-      setLoading(false);
+      console.error("Failed to fetch payroll history:", err);
     }
   };
 
