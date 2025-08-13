@@ -6,8 +6,8 @@ import { fileURLToPath } from "url";
 
 dotenv.config();
 
-// For Railway deployment, use connection pooling
-const db = mysql.createPool({
+// Create a connection pool
+const pool = mysql.createPool({
   host: process.env.DB_HOST || "localhost",
   user: process.env.DB_USER || "root",
   password: process.env.DB_PASSWORD || "root",
@@ -31,58 +31,49 @@ const db = mysql.createPool({
       return new Date(date.getTime() + (5.5 * 60 * 60 * 1000));
     }
     return next();
-  }
+  },
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
 });
+
+// Convert pool to use promises
+const db = pool.promise();
 
 // Initialize database tables
-const initializeDatabase = () => {
-  const __filename = fileURLToPath(import.meta.url);
-  const __dirname = path.dirname(__filename);
-  const modelsDir = path.join(__dirname, "..", "models");
+const initializeDatabase = async () => {
+  try {
+    // Set timezone
+    await db.query("SET time_zone = '+05:30'");
+    console.log("Database timezone set to Asia/Colombo (+05:30)");
 
-  // Read and execute all SQL files in models directory
-  fs.readdir(modelsDir, (err, files) => {
-    if (err) {
-      console.error("Error reading models directory:", err);
-      return;
-    }
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const modelsDir = path.join(__dirname, "..", "models");
 
-    files.forEach((file) => {
+    // Read and execute all SQL files
+    const files = await fs.promises.readdir(modelsDir);
+    for (const file of files) {
       if (file.endsWith(".sql")) {
         const sqlPath = path.join(modelsDir, file);
-        const sql = fs.readFileSync(sqlPath, "utf8");
-
-        db.query(sql, (error) => {
-          if (error) {
-            console.error(`Error executing ${file}:`, error);
-            return;
-          }
+        const sql = await fs.promises.readFile(sqlPath, "utf8");
+        try {
+          await db.query(sql);
           console.log(`Successfully executed ${file}`);
-        });
+        } catch (error) {
+          console.error(`Error executing ${file}:`, error);
+        }
       }
-    });
-  });
+    }
+
+    console.log("Successfully connected to the database and initialized tables.");
+  } catch (error) {
+    console.error("Database initialization error:", error);
+  }
 };
 
-db.connect((error) => {
-  if (error) {
-    console.error("Error connecting to the database:", error);
-    return;
-  }
-  console.log("Successfully connected to the database.");
-
-  // Set session timezone to Sri Lanka
-  db.query("SET time_zone = '+05:30'", (err) => {
-    if (err) {
-      console.error("Error setting timezone:", err);
-      return;
-    }
-    console.log("Database timezone set to Asia/Colombo (+05:30)");
-  });
-
-  // Initialize tables after connection
-  initializeDatabase();
-});
+// Initialize the database
+initializeDatabase();
 
 // Helper function to get current Sri Lanka time
 const getCurrentSLTime = () => {
