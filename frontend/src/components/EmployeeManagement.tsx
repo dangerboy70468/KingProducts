@@ -284,24 +284,7 @@ export const EmployeeManagement = () => {
     }
   };
 
-  const handleEditEmployeeType = async () => {
-    if (!editingEmployeeType) return;
 
-    try {
-      await api.put(`/employee-types/${editingEmployeeType.id}`, {
-        name: newEmployeeType.name,
-        description: newEmployeeType.description,
-        basic_salary: newEmployeeType.basic_salary,
-      });
-
-      await fetchEmployeeTypes();
-      setEditingEmployeeType(null);
-      setNewEmployeeType({ name: "", description: "", basic_salary: "0" });
-      setShowEmployeeTypeModal(false);
-    } catch (error) {
-      console.error("Error updating employee type:", error);
-    }
-  };
 
   const handleEditType = (type: EmployeeType) => {
     setEditingEmployeeType(type);
