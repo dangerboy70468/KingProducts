@@ -64,17 +64,8 @@ app.use("/api/dashboard", dashboardRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(`Error occurred at ${new Date().toISOString()}:`);
-  console.error('Request URL:', req.originalUrl);
-  console.error('Request Method:', req.method);
-  console.error('Error Stack:', err.stack);
-
-  // Send detailed error in development, generic in production
-  const error = process.env.NODE_ENV === 'development' 
-    ? { message: err.message, stack: err.stack }
-    : { message: 'An unexpected error occurred' };
-
-  res.status(err.status || 500).json({ error });
+  console.error(err.stack);
+  res.status(500).json({ error: "Something broke!" });
 });
 
 // Root route

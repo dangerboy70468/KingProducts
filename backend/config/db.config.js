@@ -6,21 +6,21 @@ import { fileURLToPath } from "url";
 
 dotenv.config();
 
-// Log only non-sensitive connection details
+// Log connection details (remove in production)
 console.log('Database configuration:', {
-  host: process.env.DB_HOST || "switchback.proxy.rlwy.net",
-  user: process.env.DB_USER || "root",
-  database: process.env.DB_NAME || "railway",
-  port: process.env.DB_PORT || 36399
+  host: "switchback.proxy.rlwy.net",
+  user: "root",
+  database: "railway",
+  port: 36399
 });
 
 // Create a connection pool
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || "switchback.proxy.rlwy.net",
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PASSWORD || "aUsyGZHcMGJGlvdgNLAElxqxnrltXUED",
-  database: process.env.DB_NAME || "railway",
-  port: process.env.DB_PORT || 36399,
+  host: "switchback.proxy.rlwy.net",
+  user: "root",
+  password: "aUsyGZHcMGJGlvdgNLAElxqxnrltXUED",
+  database: "railway",
+  port: 36399,
   ssl: {
     rejectUnauthorized: false
   },
