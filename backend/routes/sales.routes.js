@@ -40,31 +40,31 @@ router.get("/summary", verifyToken, async (req, res) => {
 });
 
 // Get sales by date range
-router.get("/range", verifyToken, (req, res) => {
-  const { start_date, end_date } = req.query;
-  if (!start_date || !end_date) {
-    return res.status(400).json({ error: "Start date and end date are required" });
-  }
-  
-  const sql = `
-    SELECT 
-      o.*,
-      c.name as client_name,
-      p.name as product_name
-    FROM orders o
-    JOIN client c ON o.fk_order_client = c.id
-    JOIN product p ON o.fk_order_product = p.id
-    WHERE LOWER(TRIM(o.status)) = 'delivered'
-    AND o.date BETWEEN ? AND ?
-    ORDER BY o.date DESC
-  `;
-  db.query(sql, [start_date, end_date], (err, data) => {
-    if (err) {
-      console.error('Error fetching sales by date range:', err);
-      return res.status(500).json({ error: "Error fetching sales by date range" });
+router.get("/range", verifyToken, async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+    if (!start_date || !end_date) {
+      return res.status(400).json({ error: "Start date and end date are required" });
     }
+    
+    const [data] = await db.query(`
+      SELECT 
+        o.*,
+        c.name as client_name,
+        p.name as product_name
+      FROM orders o
+      JOIN client c ON o.fk_order_client = c.id
+      JOIN product p ON o.fk_order_product = p.id
+      WHERE o.status = 'delivered'
+      AND o.date BETWEEN ? AND ?
+      ORDER BY o.date DESC
+    `, [start_date, end_date]);
+    
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching sales by date range:', error);
+    res.status(500).json({ error: "Error fetching sales by date range", details: error.message });
+  }
 });
 
 // Get sales by product
@@ -101,28 +101,29 @@ router.get("/by-product", verifyToken, async (req, res) => {
 });
 
 // Get sales by client
-router.get("/by-client", verifyToken, (req, res) => {
-  const sql = `
-    SELECT 
-      c.id as client_id,
-      c.name as client_name,
-      COUNT(*) as total_orders,
-      COALESCE(SUM(CASE 
-        WHEN o.total_price IS NULL OR o.total_price = 0 THEN o.qty * o.unit_price
-        ELSE o.total_price 
-      END), 0) as total_sales,
-      MAX(o.date) as last_purchase_date
-    FROM orders o
-    JOIN client c ON o.fk_order_client = c.id
-    WHERE o.status = 'delivered'
-    GROUP BY c.id, c.name
-    ORDER BY total_sales DESC
-  `;
-  db.query(sql, (err, data) => {
-    if (err)
-      return res.status(500).json({ error: "Error fetching sales by client" });
+router.get("/by-client", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT 
+        c.id as client_id,
+        c.name as client_name,
+        COUNT(*) as total_orders,
+        COALESCE(SUM(CASE 
+          WHEN o.total_price IS NULL OR o.total_price = 0 THEN o.qty * o.unit_price
+          ELSE o.total_price 
+        END), 0) as total_sales,
+        MAX(o.date) as last_purchase_date
+      FROM orders o
+      JOIN client c ON o.fk_order_client = c.id
+      WHERE o.status = 'delivered'
+      GROUP BY c.id, c.name
+      ORDER BY total_sales DESC
+    `);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching sales by client:', error);
+    res.status(500).json({ error: "Error fetching sales by client", details: error.message });
+  }
 });
 
 // Get monthly sales trend
@@ -161,31 +162,27 @@ router.get("/monthly-trend", verifyToken, async (req, res) => {
 });
 
 // Get top selling products
-router.get("/top-products", verifyToken, (req, res) => {
-  const { limit = 10 } = req.query;
-  const sql = `
-    SELECT 
-      p.id as product_id,
-      p.name as product_name,
-      COALESCE(SUM(o.qty), 0) as total_quantity,
-      CAST(COALESCE(SUM(CASE 
-        WHEN o.total_price IS NULL OR o.total_price = 0 THEN o.qty * o.unit_price
-        ELSE o.total_price 
-      END), 0) AS DECIMAL(10,2)) as total_sales,
-      COUNT(*) as order_count
-    FROM orders o
-    JOIN product p ON o.fk_order_product = p.id
-    WHERE LOWER(TRIM(o.status)) = 'delivered'
-    GROUP BY p.id, p.name
-    ORDER BY total_sales DESC
-    LIMIT ?
-  `;
-  db.query(sql, [parseInt(limit)], (err, data) => {
-    if (err) {
-      console.error('Error fetching top products:', err);
-      return res.status(500).json({ error: "Error fetching top products" });
-    }
-    // Convert string numbers to actual numbers
+router.get("/top-products", verifyToken, async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+    const [data] = await db.query(`
+      SELECT 
+        p.id as product_id,
+        p.name as product_name,
+        COALESCE(SUM(o.qty), 0) as total_quantity,
+        CAST(COALESCE(SUM(CASE 
+          WHEN o.total_price IS NULL OR o.total_price = 0 THEN o.qty * o.unit_price
+          ELSE o.total_price 
+        END), 0) AS DECIMAL(10,2)) as total_sales,
+        COUNT(*) as order_count
+      FROM orders o
+      JOIN product p ON o.fk_order_product = p.id
+      WHERE o.status = 'delivered'
+      GROUP BY p.id, p.name
+      ORDER BY total_sales DESC
+      LIMIT ?
+    `, [parseInt(limit)]);
+    
     const result = data.map(row => ({
       ...row,
       total_sales: Number(row.total_sales),
@@ -193,7 +190,10 @@ router.get("/top-products", verifyToken, (req, res) => {
       order_count: Number(row.order_count)
     }));
     res.json(result);
-  });
+  } catch (error) {
+    console.error('Error fetching top products:', error);
+    res.status(500).json({ error: "Error fetching top products", details: error.message });
+  }
 });
 
 // Get production cost for completed orders
