@@ -6,16 +6,23 @@ import db from "../config/db.config.js";
 const router = express.Router();
 
 // Get all products with category info
-router.get("/", verifyToken, (req, res) => {
-  const sql = `
-    SELECT p.*, pc.name as category_name 
-    FROM product p
-    LEFT JOIN product_category pc ON p.fk_product_category = pc.id
-  `;
-  db.query(sql, (err, data) => {
-    if (err) return res.status(500).json({ error: "Error fetching products" });
-    res.json(data);
-  });
+router.get("/", verifyToken, async (req, res) => {
+  try {
+    const sql = `
+      SELECT p.*, pc.name as category_name 
+      FROM product p
+      LEFT JOIN product_category pc ON p.fk_product_category = pc.id
+    `;
+    const [products] = await db.query(sql);
+    console.log('Products fetched:', products.length);
+    res.json(products);
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    res.status(500).json({ 
+      error: "Error fetching products",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
 });
 
 // Get products by category
@@ -49,23 +56,26 @@ router.get("/:id", verifyToken, (req, res) => {
 });
 
 // Create product
-router.post("/", verifyToken, validateProduct, (req, res) => {
-  const { name, fk_product_category, price, description } = req.body;
-  const sql = `
-    INSERT INTO product (name, fk_product_category, price, description) 
-    VALUES (?, ?, ?, ?)
-  `;
-  db.query(
-    sql,
-    [name, fk_product_category, price, description],
-    (err, result) => {
-      if (err) return res.status(500).json({ error: "Error creating product" });
-      res.status(201).json({
-        id: result.insertId,
-        ...req.body,
-      });
-    }
-  );
+router.post("/", verifyToken, validateProduct, async (req, res) => {
+  try {
+    const { name, fk_product_category, price, description } = req.body;
+    const sql = `
+      INSERT INTO product (name, fk_product_category, price, description) 
+      VALUES (?, ?, ?, ?)
+    `;
+    const [result] = await db.query(sql, [name, fk_product_category, price, description]);
+    console.log('Product created:', result.insertId);
+    res.status(201).json({
+      id: result.insertId,
+      ...req.body,
+    });
+  } catch (error) {
+    console.error('Error creating product:', error);
+    res.status(500).json({ 
+      error: "Error creating product",
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
 });
 
 // Update product
