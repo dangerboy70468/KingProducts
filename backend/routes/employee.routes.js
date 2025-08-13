@@ -4,7 +4,7 @@ import db from "../config/db.config.js";
 
 const router = express.Router();
 
-// Health check route
+// Health check route (no auth)
 router.get("/health", async (req, res) => {
   try {
     const result = await new Promise((resolve, reject) => {
@@ -17,6 +17,36 @@ router.get("/health", async (req, res) => {
   } catch (error) {
     console.error('Database health check failed:', error);
     res.status(500).json({ status: 'error', database: 'disconnected', error: error.message });
+  }
+});
+
+// Test employee types without auth
+router.get("/test-employee-types", async (req, res) => {
+  try {
+    console.log('Testing employee types without auth...');
+    const sql = "SELECT * FROM employee_type LIMIT 5";
+    
+    const results = await new Promise((resolve, reject) => {
+      db.query(sql, (err, results) => {
+        if (err) {
+          console.error('Database query error:', err);
+          reject(err);
+        } else {
+          console.log('Query successful, rows:', results.length);
+          resolve(results);
+        }
+      });
+    });
+    
+    res.json({ success: true, data: results, count: results.length });
+  } catch (error) {
+    console.error('Error in test route:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message,
+      code: error.code,
+      sqlState: error.sqlState
+    });
   }
 });
 
