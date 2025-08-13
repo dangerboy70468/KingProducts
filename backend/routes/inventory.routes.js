@@ -5,33 +5,39 @@ import db from "../config/db.config.js";
 const router = express.Router();
 
 // Get all inventory items
-router.get("/", verifyToken, (req, res) => {
-  const sql = `
-    SELECT i.*, p.name as product_name 
-    FROM inventory i
-    LEFT JOIN products p ON i.product_id = p.id
-  `;
-  db.query(sql, (err, data) => {
-    if (err) return res.status(500).json({ error: "Error fetching inventory" });
+router.get("/", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT b.*, p.name as product_name 
+      FROM batch b
+      LEFT JOIN product p ON b.fk_batch_product = p.id
+      ORDER BY b.id DESC
+    `);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching inventory:', error);
+    res.status(500).json({ error: "Error fetching inventory", details: error.message });
+  }
 });
 
 // Get single inventory item
-router.get("/:id", verifyToken, (req, res) => {
-  const sql = `
-    SELECT i.*, p.name as product_name 
-    FROM inventory i
-    LEFT JOIN products p ON i.product_id = p.id
-    WHERE i.id = ?
-  `;
-  db.query(sql, [req.params.id], (err, data) => {
-    if (err)
-      return res.status(500).json({ error: "Error fetching inventory item" });
-    if (data.length === 0)
+router.get("/:id", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT b.*, p.name as product_name 
+      FROM batch b
+      LEFT JOIN product p ON b.fk_batch_product = p.id
+      WHERE b.id = ?
+    `, [req.params.id]);
+    
+    if (data.length === 0) {
       return res.status(404).json({ message: "Inventory item not found" });
+    }
     res.json(data[0]);
-  });
+  } catch (error) {
+    console.error('Error fetching inventory item:', error);
+    res.status(500).json({ error: "Error fetching inventory item", details: error.message });
+  }
 });
 
 // Create inventory item
@@ -123,18 +129,20 @@ router.delete("/:id", verifyToken, (req, res) => {
 });
 
 // Get low stock items
-router.get("/status/low-stock", verifyToken, (req, res) => {
-  const sql = `
-    SELECT i.*, p.name as product_name 
-    FROM inventory i
-    LEFT JOIN products p ON i.product_id = p.id
-    WHERE i.remain_qty < 10
-  `;
-  db.query(sql, (err, data) => {
-    if (err)
-      return res.status(500).json({ error: "Error fetching low stock items" });
+router.get("/status/low-stock", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT b.*, p.name as product_name 
+      FROM batch b
+      LEFT JOIN product p ON b.fk_batch_product = p.id
+      WHERE b.qty < 10
+      ORDER BY b.qty ASC
+    `);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching low stock items:', error);
+    res.status(500).json({ error: "Error fetching low stock items", details: error.message });
+  }
 });
 
 export default router;
