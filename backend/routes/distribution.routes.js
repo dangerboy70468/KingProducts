@@ -5,32 +5,29 @@ import db from "../config/db.config.js";
 const router = express.Router();
 
 // Get all distributions
-router.get("/", verifyToken, (req, res) => {
-  const sql = `
-    SELECT 
-      d.*,
-      GROUP_CONCAT(DISTINCT e.name) as employee_names,
-      GROUP_CONCAT(DISTINCT CONCAT(o.id, ':', c.name, ' - ', p.name, ' (', COALESCE(bo.qty, 0), ' units)')) as order_details
-    FROM distribution d
-    LEFT JOIN distribution_employee de ON de.fk_distribution_employee_distribution = d.id
-    LEFT JOIN employee e ON e.id = de.fk_distribution_employee_employee
-    LEFT JOIN distribution_order do ON do.fk_distribution_order_distribution = d.id
-    LEFT JOIN orders o ON o.id = do.fk_distribution_order_order
-    LEFT JOIN client c ON c.id = o.fk_order_client
-    LEFT JOIN product p ON p.id = o.fk_order_product
-    LEFT JOIN batch_order bo ON bo.fk_batch_order_order = o.id
-    GROUP BY d.id
-    ORDER BY d.date DESC
-  `;
-  db.query(sql, (err, data) => {
-    if (err) {
-      console.error("Error fetching distributions:", err);
-      return res
-        .status(500)
-        .json({ error: "Error fetching distribution records" });
-    }
+router.get("/", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT 
+        d.*,
+        GROUP_CONCAT(DISTINCT e.name) as employee_names,
+        GROUP_CONCAT(DISTINCT CONCAT(o.id, ':', c.name, ' - ', p.name, ' (', COALESCE(bo.qty, 0), ' units)')) as order_details
+      FROM distribution d
+      LEFT JOIN distribution_employee de ON de.fk_distribution_employee_distribution = d.id
+      LEFT JOIN employee e ON e.id = de.fk_distribution_employee_employee
+      LEFT JOIN distribution_order do ON do.fk_distribution_order_distribution = d.id
+      LEFT JOIN orders o ON o.id = do.fk_distribution_order_order
+      LEFT JOIN client c ON c.id = o.fk_order_client
+      LEFT JOIN product p ON p.id = o.fk_order_product
+      LEFT JOIN batch_order bo ON bo.fk_batch_order_order = o.id
+      GROUP BY d.id
+      ORDER BY d.date DESC
+    `);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching distributions:', error);
+    res.status(500).json({ error: "Error fetching distribution records", details: error.message });
+  }
 });
 
 // Get available orders (not assigned to any distribution)
