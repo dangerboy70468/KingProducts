@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import api from "../api";
 import "./SalesManagement.css";
 import { Bar, Line } from "react-chartjs-2";
@@ -48,19 +48,16 @@ interface MonthlySales {
   total_sales: number;
 }
 
-interface ProductionCostResponse {
-  total_production_cost: number;
-}
+
 
 export const SalesManagement = () => {
   // State for data
   const [summary, setSummary] = useState<SalesSummary | null>(null);
-  const [salesByProduct, setSalesByProduct] = useState<ProductSales[]>([]);
+
   const [monthlyTrend, setMonthlyTrend] = useState<MonthlySales[]>([]);
   const [topProducts, setTopProducts] = useState<ProductSales[]>([]);
   const [productionCost, setProductionCost] = useState<number>(0);
-  const [totalOrders, setTotalOrders] = useState<number>(0);
-  const [deliveredOrders, setDeliveredOrders] = useState<number>(0);
+
 
   // State for UI
   const [loading, setLoading] = useState<boolean>(true);
@@ -138,13 +135,13 @@ export const SalesManagement = () => {
         last_sale_date: summaryRes.data?.last_sale_date
       });
 
-      // Set sales by product data
-      setSalesByProduct(salesByProductRes.data?.map((product: ProductSales) => ({
-        ...product,
-        total_sales: toNumber(product.total_sales),
-        total_quantity: toNumber(product.total_quantity),
-        order_count: toNumber(product.order_count)
-      })) || []);
+      // Set sales by product data (not used in UI but kept for potential future use)
+      // setSalesByProduct(salesByProductRes.data?.map((product: ProductSales) => ({
+      //   ...product,
+      //   total_sales: toNumber(product.total_sales),
+      //   total_quantity: toNumber(product.total_quantity),
+      //   order_count: toNumber(product.order_count)
+      // })) || []);
 
       // Set monthly trend data
       setMonthlyTrend(monthlyTrendRes.data?.map((trend: MonthlySales) => ({
@@ -163,9 +160,9 @@ export const SalesManagement = () => {
       // Set production cost
       setProductionCost(toNumber(productionCostRes.data?.total_production_cost));
 
-      // Set order counts
-      setTotalOrders(toNumber(totalOrdersRes.data?.total_orders));
-      setDeliveredOrders(toNumber(deliveredOrdersRes.data?.total_delivered_orders));
+      // Set order counts (not used in UI but kept for potential future use)
+      // setTotalOrders(toNumber(totalOrdersRes.data?.total_orders));
+      // setDeliveredOrders(toNumber(deliveredOrdersRes.data?.total_delivered_orders));
 
     } catch (err: any) {
       console.error("Error fetching sales data:", err);

@@ -5,9 +5,7 @@ interface HeaderProps {
   toggleSidebar: () => void;
 }
 
-interface PathTitles {
-  [key: string]: string;
-}
+
 
 export const Header = ({ toggleSidebar }: HeaderProps) => {
   const location = useLocation();

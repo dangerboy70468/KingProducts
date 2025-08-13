@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { PlusIcon, PencilIcon, TrashIcon, XIcon } from "lucide-react";
 import api from "../api";
 import { OrderSearch } from "./OrderSearch";
@@ -29,12 +29,7 @@ interface Order {
   status: string;
 }
 
-interface SearchFilters {
-  searchTerm: string;
-  status: string;
-  startDate: string;
-  endDate: string;
-}
+
 
 interface NewOrder {
   fk_order_client: number;
@@ -377,7 +372,7 @@ export const OrderManagement = () => {
     setDetailsOrder(order);
     setShowDetailsModal(true);
     try {
-      const response = await api.get(`/batch-orders/order/${order.id}`);
+      await api.get(`/batch-orders/order/${order.id}`);
       setBatchAssignments(response.data);
 
       // Calculate total qty including batch differences

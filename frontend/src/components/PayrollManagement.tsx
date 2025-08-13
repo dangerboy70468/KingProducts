@@ -52,8 +52,7 @@ interface SalarySlip {
 
 export const PayrollManagement = () => {
   const [payroll, setPayroll] = useState<PayrollRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const now = new Date();
     return format(now, "yyyy-MM");
