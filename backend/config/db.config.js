@@ -6,12 +6,12 @@ import { fileURLToPath } from "url";
 
 dotenv.config();
 
-// Log connection details (remove in production)
+// Log only non-sensitive connection details
 console.log('Database configuration:', {
-  host: "switchback.proxy.rlwy.net",
-  user: "root",
-  database: "railway",
-  port: 36399
+  host: process.env.DB_HOST || "switchback.proxy.rlwy.net",
+  user: process.env.DB_USER || "root",
+  database: process.env.DB_NAME || "railway",
+  port: process.env.DB_PORT || 36399
 });
 
 // Create a connection pool
