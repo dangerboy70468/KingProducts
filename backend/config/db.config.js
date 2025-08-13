@@ -6,7 +6,8 @@ import { fileURLToPath } from "url";
 
 dotenv.config();
 
-const db = mysql.createConnection({
+// For Railway deployment, use connection pooling
+const db = mysql.createPool({
   host: process.env.DB_HOST || "localhost",
   user: process.env.DB_USER || "root",
   password: process.env.DB_PASSWORD || "root",
