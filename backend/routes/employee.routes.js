@@ -5,42 +5,44 @@ import db from "../config/db.config.js";
 const router = express.Router();
 
 // Get all employees
-router.get("/employees", verifyToken, (req, res) => {
+router.get("/employees", verifyToken, async (req, res) => {
   try {
     const sql = `
       SELECT e.*, et.name as type_name 
       FROM employee e 
       LEFT JOIN employee_type et ON e.type_id = et.id
     `;
-
-    db.query(sql, (err, results) => {
-      if (err) {
-        console.error('Database error in /employees:', err);
-        return res.status(500).json({ error: "Error fetching employees" });
-      }
-      res.json(results);
+    
+    const results = await new Promise((resolve, reject) => {
+      db.query(sql, (err, results) => {
+        if (err) reject(err);
+        else resolve(results);
+      });
     });
+    
+    res.json(results);
   } catch (error) {
-    console.error('Route error in /employees:', error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Error in /employees:', error);
+    res.status(500).json({ error: "Error fetching employees" });
   }
 });
 
 // Get all employee types
-router.get("/employee-types", verifyToken, (req, res) => {
+router.get("/employee-types", verifyToken, async (req, res) => {
   try {
     const sql = "SELECT * FROM employee_type";
-
-    db.query(sql, (err, results) => {
-      if (err) {
-        console.error('Database error in /employee-types:', err);
-        return res.status(500).json({ error: "Error fetching employee types" });
-      }
-      res.json(results);
+    
+    const results = await new Promise((resolve, reject) => {
+      db.query(sql, (err, results) => {
+        if (err) reject(err);
+        else resolve(results);
+      });
     });
+    
+    res.json(results);
   } catch (error) {
-    console.error('Route error in /employee-types:', error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Error in /employee-types:', error);
+    res.status(500).json({ error: "Error fetching employee types" });
   }
 });
 

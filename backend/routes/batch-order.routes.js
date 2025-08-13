@@ -51,7 +51,7 @@ router.get("/batch/:batchId", verifyToken, (req, res) => {
 });
 
 // Get batch-order assignments by order
-router.get("/order/:orderId", verifyToken, (req, res) => {
+router.get("/order/:orderId", verifyToken, async (req, res) => {
   try {
     const sql = `
       SELECT bo.*, 
@@ -60,21 +60,23 @@ router.get("/order/:orderId", verifyToken, (req, res) => {
              b.exp_date,
              b.init_qty,
              b.cost,
-             bo.description
+             COALESCE(bo.description, '') as description
       FROM batch_order bo
       JOIN batch b ON bo.fk_batch_order_batch = b.id
       WHERE bo.fk_batch_order_order = ?
     `;
-    db.query(sql, [req.params.orderId], (err, data) => {
-      if (err) {
-        console.error('Database error in /order/:orderId:', err);
-        return res.status(500).json({ error: "Error fetching order batches" });
-      }
-      res.json(data);
+    
+    const results = await new Promise((resolve, reject) => {
+      db.query(sql, [req.params.orderId], (err, data) => {
+        if (err) reject(err);
+        else resolve(data);
+      });
     });
+    
+    res.json(results);
   } catch (error) {
-    console.error('Route error in /order/:orderId:', error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Error in /order/:orderId:', error);
+    res.status(500).json({ error: "Error fetching order batches" });
   }
 });
 
