@@ -5,88 +5,38 @@ import db from "../config/db.config.js";
 const router = express.Router();
 
 // Get sales summary
-router.get("/summary", verifyToken, (req, res) => {
-  // First, let's check what orders we have and their status values
-  db.query('SELECT id, status, LOWER(TRIM(status)) as cleaned_status FROM orders', (err, statusData) => {
-    if (err) {
-      console.error('Error checking order statuses:', err);
-      return res.status(500).json({ error: "Error checking order statuses" });
-    }
-    
-    console.log('All order statuses:', JSON.stringify(statusData, null, 2));
+router.get("/summary", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT 
+        COUNT(*) as total_orders,
+        CAST(COALESCE(SUM(CASE 
+          WHEN total_price IS NULL OR total_price = 0 THEN qty * unit_price
+          ELSE total_price 
+        END), 0) AS DECIMAL(10,2)) as total_sales,
+        CAST(COALESCE(AVG(CASE 
+          WHEN total_price IS NULL OR total_price = 0 THEN qty * unit_price
+          ELSE total_price 
+        END), 0) AS DECIMAL(10,2)) as average_order_value,
+        MIN(date) as first_sale_date,
+        MAX(date) as last_sale_date
+      FROM orders
+      WHERE status = 'delivered'
+    `);
 
-    // Now get the delivered orders
-    db.query('SELECT * FROM orders WHERE LOWER(TRIM(status)) = "delivered"', (err, ordersData) => {
-      if (err) {
-        console.error('Error checking orders:', err);
-        return res.status(500).json({ error: "Error checking orders" });
-      }
-      
-      console.log('All delivered orders:', JSON.stringify(ordersData, null, 2));
+    const result = {
+      total_orders: Number(data[0].total_orders),
+      total_sales: Number(data[0].total_sales),
+      average_order_value: Number(data[0].average_order_value),
+      first_sale_date: data[0].first_sale_date,
+      last_sale_date: data[0].last_sale_date
+    };
 
-      const sql = `
-        SELECT 
-          COUNT(*) as total_orders,
-          SUM(qty * unit_price) as raw_calculated_total,
-          SUM(total_price) as raw_total_price,
-          SUM(CASE 
-            WHEN total_price IS NULL OR total_price = 0 THEN qty * unit_price
-            ELSE total_price 
-          END) as final_total,
-          CAST(COALESCE(SUM(CASE 
-            WHEN total_price IS NULL OR total_price = 0 THEN qty * unit_price
-            ELSE total_price 
-          END), 0) AS DECIMAL(10,2)) as total_sales,
-          CAST(COALESCE(AVG(CASE 
-            WHEN total_price IS NULL OR total_price = 0 THEN qty * unit_price
-            ELSE total_price 
-          END), 0) AS DECIMAL(10,2)) as average_order_value,
-          MIN(date) as first_sale_date,
-          MAX(date) as last_sale_date,
-          GROUP_CONCAT(
-            CONCAT(
-              'id:', id, 
-              ',qty:', qty,
-              ',unit_price:', unit_price,
-              ',total_price:', COALESCE(total_price, 'NULL'),
-              ',calculated:', qty * unit_price,
-              ',date:', date,
-              ',status:', status
-            )
-            ORDER BY id SEPARATOR '; '
-          ) as debug_data
-        FROM orders
-        WHERE LOWER(TRIM(status)) = 'delivered'
-      `;
-
-      console.log('Executing SQL:', sql);
-
-      db.query(sql, (err, data) => {
-        if (err) {
-          console.error('Error fetching sales summary:', err);
-          return res.status(500).json({ error: "Error fetching sales summary" });
-        }
-
-        console.log('Raw SQL result:', JSON.stringify(data[0], null, 2));
-
-        // Convert string numbers to actual numbers and handle dates
-        const result = {
-          total_orders: Number(data[0].total_orders),
-          total_sales: Number(data[0].total_sales),
-          raw_calculated_total: Number(data[0].raw_calculated_total),
-          raw_total_price: Number(data[0].raw_total_price),
-          final_total: Number(data[0].final_total),
-          average_order_value: Number(data[0].average_order_value),
-          first_sale_date: data[0].first_sale_date,
-          last_sale_date: data[0].last_sale_date,
-          debug_data: data[0].debug_data
-        };
-
-        console.log('Processed result:', JSON.stringify(result, null, 2));
-        res.json(result);
-      });
-    });
-  });
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching sales summary:', error);
+    res.status(500).json({ error: "Error fetching sales summary", details: error.message });
+  }
 });
 
 // Get sales by date range
