@@ -127,27 +127,24 @@ router.post("/", verifyToken, validateBatch, async (req, res) => {
 });
 
 // Update batch
-router.put("/:id", verifyToken, validateBatch, (req, res) => {
-  const {
-    fk_batch_product,
-    batch_number,
-    mfg_date,
-    exp_date,
-    init_qty,
-    cost,
-    description,
-  } = req.body;
+router.put("/:id", verifyToken, validateBatch, async (req, res) => {
+  try {
+    const {
+      fk_batch_product,
+      batch_number,
+      mfg_date,
+      exp_date,
+      init_qty,
+      cost,
+      description,
+    } = req.body;
 
-  const sql = `
-    UPDATE batch 
-    SET fk_batch_product=?, batch_number=?, mfg_date=?,
-        exp_date=?, init_qty=?, cost=?, description=?
-    WHERE id=?
-  `;
-
-  db.query(
-    sql,
-    [
+    const [result] = await db.query(`
+      UPDATE batch 
+      SET fk_batch_product=?, batch_number=?, mfg_date=?,
+          exp_date=?, init_qty=?, cost=?, description=?
+      WHERE id=?
+    `, [
       fk_batch_product,
       batch_number,
       mfg_date,
@@ -156,25 +153,31 @@ router.put("/:id", verifyToken, validateBatch, (req, res) => {
       cost,
       description,
       req.params.id,
-    ],
-    (err, result) => {
-      if (err) return res.status(500).json({ error: "Error updating batch" });
-      if (result.affectedRows === 0)
-        return res.status(404).json({ message: "Batch not found" });
-      res.json({ id: req.params.id, ...req.body });
+    ]);
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Batch not found" });
     }
-  );
+    res.json({ id: req.params.id, ...req.body });
+  } catch (error) {
+    console.error('Error updating batch:', error);
+    res.status(500).json({ error: "Error updating batch", details: error.message });
+  }
 });
 
 // Delete batch
-router.delete("/:id", verifyToken, (req, res) => {
-  const sql = "DELETE FROM batch WHERE id = ?";
-  db.query(sql, [req.params.id], (err, result) => {
-    if (err) return res.status(500).json({ error: "Error deleting batch" });
-    if (result.affectedRows === 0)
+router.delete("/:id", verifyToken, async (req, res) => {
+  try {
+    const [result] = await db.query("DELETE FROM batch WHERE id = ?", [req.params.id]);
+    
+    if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Batch not found" });
+    }
     res.json({ message: "Batch deleted successfully" });
-  });
+  } catch (error) {
+    console.error('Error deleting batch:', error);
+    res.status(500).json({ error: "Error deleting batch", details: error.message });
+  }
 });
 
 // Get batch orders
@@ -196,23 +199,24 @@ router.get("/:id/orders", verifyToken, async (req, res) => {
 });
 
 // Add order to batch
-router.post("/:batchId/orders/:orderId", verifyToken, (req, res) => {
-  const { qty } = req.body;
-  const sql =
-    "INSERT INTO batch_order (fk_batch_order_batch, fk_batch_order_order, qty) VALUES (?, ?, ?)";
-  db.query(
-    sql,
-    [req.params.batchId, req.params.orderId, qty],
-    (err, result) => {
-      if (err)
-        return res.status(500).json({ error: "Error adding order to batch" });
-      res.status(201).json({
-        batchId: req.params.batchId,
-        orderId: req.params.orderId,
-        qty,
-      });
-    }
-  );
+router.post("/:batchId/orders/:orderId", verifyToken, async (req, res) => {
+  try {
+    const { qty } = req.body;
+    
+    const [result] = await db.query(
+      "INSERT INTO batch_order (fk_batch_order_batch, fk_batch_order_order, qty) VALUES (?, ?, ?)",
+      [req.params.batchId, req.params.orderId, qty]
+    );
+    
+    res.status(201).json({
+      batchId: req.params.batchId,
+      orderId: req.params.orderId,
+      qty,
+    });
+  } catch (error) {
+    console.error('Error adding order to batch:', error);
+    res.status(500).json({ error: "Error adding order to batch", details: error.message });
+  }
 });
 
 export default router;
