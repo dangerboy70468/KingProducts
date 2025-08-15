@@ -26,33 +26,40 @@ router.get("/", verifyToken, async (req, res) => {
 });
 
 // Get products by category
-router.get("/category/:categoryId", verifyToken, (req, res) => {
-  const sql = `
-    SELECT p.*, pc.name as category_name 
-    FROM product p
-    LEFT JOIN product_category pc ON p.fk_product_category = pc.id
-    WHERE p.fk_product_category = ?
-  `;
-  db.query(sql, [req.params.categoryId], (err, data) => {
-    if (err) return res.status(500).json({ error: "Error fetching products" });
+router.get("/category/:categoryId", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT p.*, pc.name as category_name 
+      FROM product p
+      LEFT JOIN product_category pc ON p.fk_product_category = pc.id
+      WHERE p.fk_product_category = ?
+    `, [req.params.categoryId]);
     res.json(data);
-  });
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    res.status(500).json({ error: "Error fetching products", details: error.message });
+  }
 });
 
 // Get single product
-router.get("/:id", verifyToken, (req, res) => {
-  const sql = `
-    SELECT p.*, pc.name as category_name 
-    FROM product p
-    LEFT JOIN product_category pc ON p.fk_product_category = pc.id
-    WHERE p.id = ?
-  `;
-  db.query(sql, [req.params.id], (err, data) => {
-    if (err) return res.status(500).json({ error: "Error fetching product" });
-    if (data.length === 0)
+router.get("/:id", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query(`
+      SELECT p.*, pc.name as category_name 
+      FROM product p
+      LEFT JOIN product_category pc ON p.fk_product_category = pc.id
+      WHERE p.id = ?
+    `, [req.params.id]);
+    
+    if (data.length === 0) {
       return res.status(404).json({ message: "Product not found" });
+    }
+    
     res.json(data[0]);
-  });
+  } catch (error) {
+    console.error('Error fetching product:', error);
+    res.status(500).json({ error: "Error fetching product", details: error.message });
+  }
 });
 
 // Create product
@@ -79,34 +86,40 @@ router.post("/", verifyToken, validateProduct, async (req, res) => {
 });
 
 // Update product
-router.put("/:id", verifyToken, validateProduct, (req, res) => {
-  const { name, fk_product_category, price, description } = req.body;
-  const sql = `
-    UPDATE product 
-    SET name=?, fk_product_category=?, price=?, description=?
-    WHERE id=?
-  `;
-  db.query(
-    sql,
-    [name, fk_product_category, price, description, req.params.id],
-    (err, result) => {
-      if (err) return res.status(500).json({ error: "Error updating product" });
-      if (result.affectedRows === 0)
-        return res.status(404).json({ message: "Product not found" });
-      res.json({ id: req.params.id, ...req.body });
+router.put("/:id", verifyToken, validateProduct, async (req, res) => {
+  try {
+    const { name, fk_product_category, price, description } = req.body;
+    const [result] = await db.query(`
+      UPDATE product 
+      SET name=?, fk_product_category=?, price=?, description=?
+      WHERE id=?
+    `, [name, fk_product_category, price, description, req.params.id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ message: "Product not found" });
     }
-  );
+    
+    res.json({ id: req.params.id, ...req.body });
+  } catch (error) {
+    console.error('Error updating product:', error);
+    res.status(500).json({ error: "Error updating product", details: error.message });
+  }
 });
 
 // Delete product
-router.delete("/:id", verifyToken, (req, res) => {
-  const sql = "DELETE FROM product WHERE id = ?";
-  db.query(sql, [req.params.id], (err, result) => {
-    if (err) return res.status(500).json({ error: "Error deleting product" });
-    if (result.affectedRows === 0)
+router.delete("/:id", verifyToken, async (req, res) => {
+  try {
+    const [result] = await db.query("DELETE FROM product WHERE id = ?", [req.params.id]);
+    
+    if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Product not found" });
+    }
+    
     res.json({ message: "Product deleted successfully" });
-  });
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    res.status(500).json({ error: "Error deleting product", details: error.message });
+  }
 });
 
 export default router;
