@@ -8,9 +8,17 @@ const router = express.Router();
 // Get all product categories
 router.get("/", verifyToken, async (req, res) => {
   try {
-    const sql = "SELECT * FROM product_category";
+    const sql = "SELECT * FROM product_category ORDER BY name";
     const [categories] = await db.query(sql);
     console.log('Categories fetched:', categories.length);
+    
+    // Add cache-busting headers
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    
     res.json(categories);
   } catch (error) {
     console.error('Error fetching categories:', error);

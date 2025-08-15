@@ -12,9 +12,18 @@ router.get("/", verifyToken, async (req, res) => {
       SELECT p.*, pc.name as category_name 
       FROM product p
       LEFT JOIN product_category pc ON p.fk_product_category = pc.id
+      ORDER BY p.name
     `;
     const [products] = await db.query(sql);
     console.log('Products fetched:', products.length);
+    
+    // Add cache-busting headers
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    
     res.json(products);
   } catch (error) {
     console.error('Error fetching products:', error);
