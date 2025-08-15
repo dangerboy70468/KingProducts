@@ -15,7 +15,11 @@ interface ApiError {
   };
 }
 
-export const ProductCategoryManagement = () => {
+interface ProductCategoryManagementProps {
+  onCategoryAdded?: () => void;
+}
+
+export const ProductCategoryManagement = ({ onCategoryAdded }: ProductCategoryManagementProps) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCategory, setNewCategory] = useState("");
@@ -53,13 +57,13 @@ export const ProductCategoryManagement = () => {
     try {
       setLoading(true);
       setError("");
-      await api.post("/product-categories", {
+      const response = await api.post("/product-categories", {
         name: newCategory,
       });
-      // Refetch categories to get updated list
-      await fetchCategories();
+      setCategories([...categories, response.data]);
       setNewCategory("");
       setShowAddModal(false);
+      onCategoryAdded?.();
     } catch (error) {
       const apiError = error as ApiError;
       setError(apiError.response?.data?.error || "Failed to add category");
@@ -112,8 +116,7 @@ export const ProductCategoryManagement = () => {
     try {
       setLoading(true);
       await api.delete(`/product-categories/${categoryToDelete}`);
-      // Refetch categories to get updated list
-      await fetchCategories();
+      setCategories(categories.filter(cat => cat.id !== categoryToDelete));
       setShowDeleteConfirm(false);
       setCategoryToDelete(null);
     } catch (error) {

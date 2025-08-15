@@ -148,9 +148,20 @@ export const ProductManagement = () => {
             price: parseFloat(newProduct.price),
             description: newProduct.description || "",
           });
+
+          setProducts(
+            products.map((p) =>
+              p.id === editingProduct.id
+                ? {
+                    ...p,
+                    ...newProduct,
+                  }
+                : p
+            )
+          );
           setEditingProduct(null);
         } else {
-          await api.post("/products", {
+          const response = await api.post("/products", {
             name: newProduct.name,
             fk_product_category: categories.find(
               (cat) => cat.name === newProduct.category
@@ -158,10 +169,16 @@ export const ProductManagement = () => {
             price: parseFloat(newProduct.price),
             description: newProduct.description || "",
           });
+
+          setProducts([
+            ...products,
+            {
+              id: response.data.id,
+              ...newProduct,
+            },
+          ]);
         }
 
-        // Refetch products to get updated list
-        await fetchProducts();
         resetForm();
         setShowAddProduct(false);
       } catch (error) {
@@ -179,8 +196,9 @@ export const ProductManagement = () => {
     if (productToDelete) {
       try {
         await api.delete(`/products/${productToDelete}`);
-        // Refetch products to get updated list
-        await fetchProducts();
+        setProducts(
+          products.filter((product) => product.id !== productToDelete)
+        );
         setShowDeleteConfirm(false);
         setProductToDelete(null);
       } catch (error) {
@@ -215,11 +233,11 @@ export const ProductManagement = () => {
     try {
       setCategoryLoading(true);
       setCategoryError("");
-      await api.post("/product-categories", {
+      const response = await api.post("/product-categories", {
         name: newCategory,
       });
-      // Refetch categories to get updated list
-      await fetchCategories();
+      const newCat = response.data;
+      setCategories([...categories, newCat]);
       setNewCategory("");
       setShowAddCategory(false);
     } catch (error) {
@@ -245,7 +263,7 @@ export const ProductManagement = () => {
               ← Back to Products
             </button>
           </div>
-          <ProductCategoryManagement />
+          <ProductCategoryManagement onCategoryAdded={fetchCategories} />
         </>
       ) : (
         <>
@@ -261,11 +279,9 @@ export const ProductManagement = () => {
                 Manage Categories
               </button>
               <button
-                onClick={async () => {
+                onClick={() => {
                   setEditingProduct(null);
                   resetForm();
-                  // Refetch categories when opening product form
-                  await fetchCategories();
                   setShowAddProduct(true);
                 }}
                 className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md flex items-center gap-2"
