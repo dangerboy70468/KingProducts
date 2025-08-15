@@ -53,10 +53,11 @@ export const ProductCategoryManagement = () => {
     try {
       setLoading(true);
       setError("");
-      const response = await api.post("/product-categories", {
+      await api.post("/product-categories", {
         name: newCategory,
       });
-      setCategories([...categories, response.data]);
+      // Refetch categories to get updated list
+      await fetchCategories();
       setNewCategory("");
       setShowAddModal(false);
     } catch (error) {
@@ -111,7 +112,8 @@ export const ProductCategoryManagement = () => {
     try {
       setLoading(true);
       await api.delete(`/product-categories/${categoryToDelete}`);
-      setCategories(categories.filter(cat => cat.id !== categoryToDelete));
+      // Refetch categories to get updated list
+      await fetchCategories();
       setShowDeleteConfirm(false);
       setCategoryToDelete(null);
     } catch (error) {
