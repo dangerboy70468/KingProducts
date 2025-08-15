@@ -22,15 +22,19 @@ router.get("/", verifyToken, async (req, res) => {
 });
 
 // Get single product category
-router.get("/:id", verifyToken, (req, res) => {
-  const sql = "SELECT * FROM product_category WHERE id = ?";
-  db.query(sql, [req.params.id], (err, data) => {
-    if (err)
-      return res.status(500).json({ error: "Error fetching product category" });
-    if (data.length === 0)
+router.get("/:id", verifyToken, async (req, res) => {
+  try {
+    const [data] = await db.query("SELECT * FROM product_category WHERE id = ?", [req.params.id]);
+    
+    if (data.length === 0) {
       return res.status(404).json({ message: "Category not found" });
+    }
+    
     res.json(data[0]);
-  });
+  } catch (error) {
+    console.error('Error fetching product category:', error);
+    res.status(500).json({ error: "Error fetching product category", details: error.message });
+  }
 });
 
 // Create product category
@@ -65,28 +69,36 @@ router.post("/", verifyToken, validateCategory, async (req, res) => {
 });
 
 // Update product category
-router.put("/:id", verifyToken, validateCategory, (req, res) => {
-  const { name } = req.body;
-  const sql = "UPDATE product_category SET name = ? WHERE id = ?";
-  db.query(sql, [name, req.params.id], (err, result) => {
-    if (err)
-      return res.status(500).json({ error: "Error updating product category" });
-    if (result.affectedRows === 0)
+router.put("/:id", verifyToken, validateCategory, async (req, res) => {
+  try {
+    const { name } = req.body;
+    const [result] = await db.query("UPDATE product_category SET name = ? WHERE id = ?", [name, req.params.id]);
+    
+    if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Category not found" });
+    }
+    
     res.json({ id: parseInt(req.params.id), name });
-  });
+  } catch (error) {
+    console.error('Error updating product category:', error);
+    res.status(500).json({ error: "Error updating product category", details: error.message });
+  }
 });
 
 // Delete product category
-router.delete("/:id", verifyToken, (req, res) => {
-  const sql = "DELETE FROM product_category WHERE id = ?";
-  db.query(sql, [req.params.id], (err, result) => {
-    if (err)
-      return res.status(500).json({ error: "Error deleting product category" });
-    if (result.affectedRows === 0)
+router.delete("/:id", verifyToken, async (req, res) => {
+  try {
+    const [result] = await db.query("DELETE FROM product_category WHERE id = ?", [req.params.id]);
+    
+    if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Category not found" });
+    }
+    
     res.json({ message: "Category deleted successfully" });
-  });
+  } catch (error) {
+    console.error('Error deleting product category:', error);
+    res.status(500).json({ error: "Error deleting product category", details: error.message });
+  }
 });
 
 export default router;
