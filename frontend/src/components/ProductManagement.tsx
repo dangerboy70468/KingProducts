@@ -263,7 +263,7 @@ export const ProductManagement = () => {
               ← Back to Products
             </button>
           </div>
-          <ProductCategoryManagement onCategoryAdded={fetchCategories} />
+          <ProductCategoryManagement onCategoryAdded={fetchCategories} onCategoryDeleted={fetchProducts} />
         </>
       ) : (
         <>

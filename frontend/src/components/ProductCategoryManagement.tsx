@@ -17,9 +17,10 @@ interface ApiError {
 
 interface ProductCategoryManagementProps {
   onCategoryAdded?: () => void;
+  onCategoryDeleted?: () => void;
 }
 
-export const ProductCategoryManagement = ({ onCategoryAdded }: ProductCategoryManagementProps) => {
+export const ProductCategoryManagement = ({ onCategoryAdded, onCategoryDeleted }: ProductCategoryManagementProps) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newCategory, setNewCategory] = useState("");
@@ -119,6 +120,7 @@ export const ProductCategoryManagement = ({ onCategoryAdded }: ProductCategoryMa
       setCategories(categories.filter(cat => cat.id !== categoryToDelete));
       setShowDeleteConfirm(false);
       setCategoryToDelete(null);
+      onCategoryDeleted?.();
     } catch (error) {
       const apiError = error as ApiError;
       setError(apiError.response?.data?.error || "Failed to delete category");
