@@ -70,71 +70,89 @@ router.get("/employee-types", verifyToken, async (req, res) => {
 });
 
 // Add new employee type
-router.post("/employee-types", verifyToken, (req, res) => {
-  const { name, description, basic_salary } = req.body;
+router.post("/employee-types", verifyToken, async (req, res) => {
+  try {
+    const { name, description, basic_salary } = req.body;
 
-  if (!name) {
-    return res.status(400).json({ error: "Name is required" });
-  }
-
-  // Validate basic_salary
-  const salary = basic_salary !== undefined ? parseFloat(basic_salary) : 0;
-  if (isNaN(salary) || salary < 0) {
-    return res
-      .status(400)
-      .json({ error: "Basic salary must be a non-negative number" });
-  }
-
-  const sql =
-    "INSERT INTO employee_type (name, description, basic_salary) VALUES (?, ?, ?)";
-
-  db.query(sql, [name, description, salary], (err, result) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Error creating employee type" });
+    if (!name) {
+      return res.status(400).json({ error: "Name is required" });
     }
+
+    // Validate basic_salary
+    const salary = basic_salary !== undefined ? parseFloat(basic_salary) : 0;
+    if (isNaN(salary) || salary < 0) {
+      return res
+        .status(400)
+        .json({ error: "Basic salary must be a non-negative number" });
+    }
+
+    const sql =
+      "INSERT INTO employee_type (name, description, basic_salary) VALUES (?, ?, ?)";
+
+    const [result] = await db.query(sql, [name, description, salary]);
     res
       .status(201)
       .json({ id: result.insertId, name, description, basic_salary: salary });
-  });
+  } catch (error) {
+    console.error('Error creating employee type:', error);
+    res.status(500).json({ error: "Error creating employee type" });
+  }
 });
 
 // Update employee type
-router.put("/employee-types/:id", verifyToken, (req, res) => {
-  const { id } = req.params;
-  const { name, description, basic_salary } = req.body;
+router.put("/employee-types/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, basic_salary } = req.body;
 
-  if (!name) {
-    return res.status(400).json({ error: "Name is required" });
-  }
-
-  // Validate basic_salary
-  const salary = basic_salary !== undefined ? parseFloat(basic_salary) : 0;
-  if (isNaN(salary) || salary < 0) {
-    return res
-      .status(400)
-      .json({ error: "Basic salary must be a non-negative number" });
-  }
-
-  const sql =
-    "UPDATE employee_type SET name = ?, description = ?, basic_salary = ? WHERE id = ?";
-
-  db.query(sql, [name, description, salary, id], (err, result) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Error updating employee type" });
+    if (!name) {
+      return res.status(400).json({ error: "Name is required" });
     }
+
+    // Validate basic_salary
+    const salary = basic_salary !== undefined ? parseFloat(basic_salary) : 0;
+    if (isNaN(salary) || salary < 0) {
+      return res
+        .status(400)
+        .json({ error: "Basic salary must be a non-negative number" });
+    }
+
+    const sql =
+      "UPDATE employee_type SET name = ?, description = ?, basic_salary = ? WHERE id = ?";
+
+    const [result] = await db.query(sql, [name, description, salary, id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Employee type not found" });
     }
 
     res.json({ id: parseInt(id), name, description, basic_salary: salary });
-  });
+  } catch (error) {
+    console.error('Error updating employee type:', error);
+    res.status(500).json({ error: "Error updating employee type" });
+  }
+});
+
+// Delete employee type
+router.delete("/employee-types/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const sql = "DELETE FROM employee_type WHERE id = ?";
+    const [result] = await db.query(sql, [id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Employee type not found" });
+    }
+    
+    res.json({ message: "Employee type deleted successfully" });
+  } catch (error) {
+    console.error('Error deleting employee type:', error);
+    res.status(500).json({ error: "Error deleting employee type" });
+  }
 });
 
 // Add new employee
-router.post("/employees", verifyToken, (req, res) => {
+router.post("/employees", verifyToken, async (req, res) => {
   try {
     const { name, type_id, nic, acc_no, dob, email, password, phone1, phone2 } =
       req.body;
@@ -153,111 +171,83 @@ router.post("/employees", verifyToken, (req, res) => {
             SELECT 'acc_no' as field FROM employee WHERE acc_no = ? AND acc_no IS NOT NULL
         `;
 
-    db.query(checkUniqueSql, [email, nic, acc_no], (err, duplicates) => {
-      if (err) {
-        console.error(err);
-        return res.status(500).json({ error: "Error checking unique fields" });
+    const [duplicates] = await db.query(checkUniqueSql, [email, nic, acc_no]);
+
+    if (duplicates.length > 0) {
+      const field = duplicates[0].field;
+      return res.status(400).json({ error: `${field} already exists` });
+    }
+
+    // Check if employee type exists
+    const checkTypeSql = "SELECT id FROM employee_type WHERE id = ?";
+    const [types] = await db.query(checkTypeSql, [type_id]);
+
+    if (types.length === 0) {
+      return res.status(400).json({ error: "Invalid employee type" });
+    }
+
+    // Insert new employee
+    const insertSql = `
+                INSERT INTO employee 
+                (name, type_id, nic, acc_no, dob, email, password, phone1, phone2) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `;
+
+    let accNoInt = null;
+    if (acc_no) {
+      accNoInt = parseInt(acc_no);
+      if (isNaN(accNoInt)) {
+        return res
+          .status(400)
+          .json({ error: "Account number must be a valid number" });
       }
+    }
+    const values = [
+      name,
+      type_id,
+      nic || null,
+      accNoInt,
+      dob || null,
+      email,
+      password,
+      phone1,
+      phone2 || null,
+    ];
 
-      if (duplicates.length > 0) {
-        const field = duplicates[0].field;
-        return res.status(400).json({ error: `${field} already exists` });
-      }
+    const [result] = await db.query(insertSql, values);
 
-      // Check if employee type exists
-      const checkTypeSql = "SELECT id FROM employee_type WHERE id = ?";
-      db.query(checkTypeSql, [type_id], (err, types) => {
-        if (err) {
-          console.error(err);
-          return res
-            .status(500)
-            .json({ error: "Error checking employee type" });
-        }
-
-        if (types.length === 0) {
-          return res.status(400).json({ error: "Invalid employee type" });
-        }
-
-        // Insert new employee
-        const insertSql = `
-                    INSERT INTO employee 
-                    (name, type_id, nic, acc_no, dob, email, password, phone1, phone2) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    // Fetch the created employee to include type_name
+    const getEmployeeSql = `
+                    SELECT e.*, et.name as type_name 
+                    FROM employee e
+                    LEFT JOIN employee_type et ON e.type_id = et.id
+                    WHERE e.id = ?
                 `;
 
-        let accNoInt = null;
-        if (acc_no) {
-          accNoInt = parseInt(acc_no);
-          if (isNaN(accNoInt)) {
-            return res
-              .status(400)
-              .json({ error: "Account number must be a valid number" });
-          }
-        }
-        const values = [
-          name,
-          type_id,
-          nic || null,
-          accNoInt,
-          dob || null,
-          email,
-          password,
-          phone1,
-          phone2 || null,
-        ];
-
-        db.query(insertSql, values, (err, result) => {
-          if (err) {
-            console.error(err);
-            return res.status(500).json({ error: "Error creating employee" });
-          }
-
-          // Fetch the created employee to include type_name
-          const getEmployeeSql = `
-                        SELECT e.*, et.name as type_name 
-                        FROM employee e
-                        LEFT JOIN employee_type et ON e.type_id = et.id
-                        WHERE e.id = ?
-                    `;
-
-          db.query(getEmployeeSql, [result.insertId], (err, employees) => {
-            if (err) {
-              console.error(err);
-              return res
-                .status(500)
-                .json({ error: "Error fetching created employee" });
-            }
-
-            const employee = employees[0];
-            delete employee.password;
-            res.status(201).json(employee);
-          });
-        });
-      });
-    });
+    const [employees] = await db.query(getEmployeeSql, [result.insertId]);
+    const employee = employees[0];
+    delete employee.password;
+    res.status(201).json(employee);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Error creating employee:', error);
+    res.status(500).json({ error: "Error creating employee" });
   }
 });
 
 // Update employee
-router.put("/employees/:id", verifyToken, (req, res) => {
-  const { id } = req.params;
-  const { name, type_id, nic, acc_no, dob, email, phone1, phone2 } = req.body;
+router.put("/employees/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, type_id, nic, acc_no, dob, email, phone1, phone2 } = req.body;
 
-  // Validate required fields
-  if (!name || !type_id || !email || !phone1) {
-    return res.status(400).json({ error: "Missing required fields" });
-  }
-
-  // Check for existing email except current employee
-  const checkEmailSql = "SELECT id FROM employee WHERE email = ? AND id != ?";
-  db.query(checkEmailSql, [email, id], (err, results) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Error checking email" });
+    // Validate required fields
+    if (!name || !type_id || !email || !phone1) {
+      return res.status(400).json({ error: "Missing required fields" });
     }
+
+    // Check for existing email except current employee
+    const checkEmailSql = "SELECT id FROM employee WHERE email = ? AND id != ?";
+    const [results] = await db.query(checkEmailSql, [email, id]);
 
     if (results.length > 0) {
       return res.status(400).json({ error: "Email already exists" });
@@ -270,39 +260,33 @@ router.put("/employees/:id", verifyToken, (req, res) => {
       WHERE id = ?
     `;
 
-    db.query(
-      sql,
-      [name, type_id, nic, acc_no, dob, email, phone1, phone2, id],
-      (err, result) => {
-        if (err) {
-          console.error(err);
-          return res.status(500).json({ error: "Error updating employee" });
-        }
-        if (result.affectedRows === 0) {
-          return res.status(404).json({ error: "Employee not found" });
-        }
-        res.json({ id, ...req.body });
-      }
-    );
-  });
+    const [result] = await db.query(sql, [name, type_id, nic, acc_no, dob, email, phone1, phone2, id]);
+    
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "Employee not found" });
+    }
+    res.json({ id, ...req.body });
+  } catch (error) {
+    console.error('Error updating employee:', error);
+    res.status(500).json({ error: "Error updating employee" });
+  }
 });
 
 // Delete employee
-router.delete("/employees/:id", verifyToken, (req, res) => {
-  const { id } = req.params;
-
-  const sql = "DELETE FROM employee WHERE id = ?";
-
-  db.query(sql, [id], (err, result) => {
-    if (err) {
-      console.error(err);
-      return res.status(500).json({ error: "Error deleting employee" });
-    }
+router.delete("/employees/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const sql = "DELETE FROM employee WHERE id = ?";
+    const [result] = await db.query(sql, [id]);
+    
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Employee not found" });
     }
     res.json({ message: "Employee deleted successfully" });
-  });
+  } catch (error) {
+    console.error('Error deleting employee:', error);
+    res.status(500).json({ error: "Error deleting employee" });
+  }
 });
 
 export default router;
