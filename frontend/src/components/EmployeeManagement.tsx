@@ -98,6 +98,7 @@ export const EmployeeManagement = () => {
   const [showTypesModal, setShowTypesModal] = useState(false);
   const [editingEmployeeType, setEditingEmployeeType] =
     useState<EmployeeType | null>(null);
+  const [employeeTypeError, setEmployeeTypeError] = useState("");
 
   useEffect(() => {
     fetchEmployees();
@@ -258,9 +259,11 @@ export const EmployeeManagement = () => {
   const handleAddEmployeeType = async () => {
     try {
       if (!newEmployeeType.name.trim()) {
+        setEmployeeTypeError("Type name is required");
         return;
       }
 
+      setEmployeeTypeError("");
       const typeData = {
         ...newEmployeeType,
         basic_salary: Number(newEmployeeType.basic_salary) || 0
@@ -278,9 +281,11 @@ export const EmployeeManagement = () => {
       await fetchEmployeeTypes();
       setNewEmployeeType({ name: "", description: "", basic_salary: "0" });
       setEditingEmployeeType(null);
+      setEmployeeTypeError("");
       setShowEmployeeTypeModal(false);
     } catch (error) {
       console.error("Error saving employee type:", error);
+      setEmployeeTypeError("Failed to save employee type");
     }
   };
 
@@ -373,6 +378,7 @@ export const EmployeeManagement = () => {
                 description: "",
                 basic_salary: "0",
               });
+              setEmployeeTypeError("");
               setShowEmployeeTypeModal(true);
             }}
             className="px-4 py-2 bg-green-600 text-white rounded-md flex items-center hover:bg-green-700"
@@ -939,6 +945,9 @@ export const EmployeeManagement = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter type name"
                 />
+                {employeeTypeError && (
+                  <p className="text-sm text-red-600 mt-1">{employeeTypeError}</p>
+                )}
               </div>
               <div>
                 <label
